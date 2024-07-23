@@ -5,23 +5,35 @@ import torch
 import torch.nn as nn
 from torch.utils.data import TensorDataset, DataLoader
 
-class FullyConnectedNet(nn.Module):
-    def __init__(self, ch_in, ch_out, chs=(128, 256, 256)):
-        super().__init__()
-        current_ch = ch_in
-        components = OrderedDict()
-        for i, ch in enumerate(chs):
-            components[f'fc{i}'] = nn.Linear(current_ch, ch)
-            components[f'act{i}'] = nn.ReLU()
-            current_ch = ch
+class PolicyNetwork(nn.Module):
+    def __init__(self, state_dim, action_dim):
+        super(PolicyNetwork, self).__init__()
+        self.fc1 = nn.Linear(state_dim, 128)
+        self.fc2 = nn.Linear(128, 128)
+        self.fc3 = nn.Linear(128, action_dim)
+        
+    def forward(self, x):
+        x = torch.relu(self.fc1(x))
+        x = torch.relu(self.fc2(x))
+        return torch.softmax(self.fc3(x), dim=-1)
 
-        components['fc_out'] = nn.Linear(current_ch, ch_out)
-        self.f = nn.Sequential(components)
+class FullyConnectedNet(nn.Module):
+    def __init__(self, input_dim: int, hidden_dims, activation=nn.ReLU, activate_final=False):
+        super(FullyConnectedNet, self).__init__()
+        layers = []
+        current_dim = input_dim
+        for dim in hidden_dims:
+            layers.append(nn.Linear(current_dim, dim))
+            layers.append(activation())
+            current_dim = dim
+        layers.append(nn.Linear(current_dim, 1))  # Output dimension is 1
+        if activate_final:
+            layers.append(activation())
+        self.net = nn.Sequential(*layers)
 
     def forward(self, x):
-        return self.f(x)
-
-
+        return self.net(x)
+    
 def network_weight_matrices(model, max_norm, eps=1e-8):
     for module in model.modules():
         if isinstance(module, nn.Linear):
