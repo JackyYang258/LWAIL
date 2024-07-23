@@ -34,6 +34,16 @@ class FullyConnectedNet(nn.Module):
     def forward(self, x):
         return self.net(x)
     
+class PhiNet(nn.Module):
+    def __init__(self, hidden_dims, activation=nn.GELU, activate_final=False):
+        super(PhiNet, self).__init__()
+        layers = []
+        for i in range(len(hidden_dims) - 1):
+            layers.append(nn.Linear(hidden_dims[i], hidden_dims[i+1]))
+            if i + 1 < len(hidden_dims) or activate_final:
+                layers.append(activation())
+        self.net = nn.Sequential(*layers)
+    
 def network_weight_matrices(model, max_norm, eps=1e-8):
     for module in model.modules():
         if isinstance(module, nn.Linear):
@@ -55,74 +65,74 @@ def _get_batch(iterator, loader):
     return samples, iterator
 
 
-def _eval_wasserstein_model(p_loader, q_loader, h, device):
-    p_length = len(p_loader.dataset)
-    q_length = len(q_loader.dataset)
+# def _eval_wasserstein_model(p_loader, q_loader, h, device):
+#     p_length = len(p_loader.dataset)
+#     q_length = len(q_loader.dataset)
 
-    p_length_inv = torch.DoubleTensor([1.]).to(device) / p_length
-    q_length_inv = torch.DoubleTensor([1.]).to(device) / q_length
-    h_p_expectation = torch.DoubleTensor([0.])
-    h_q_expectation = torch.DoubleTensor([0.])
-    with torch.no_grad():
-        for data in p_loader:
-            data = data[0][:,None].to(device)
-            h_p_expectation += torch.sum(h(data).double() * p_length_inv).item()
+#     p_length_inv = torch.DoubleTensor([1.]).to(device) / p_length
+#     q_length_inv = torch.DoubleTensor([1.]).to(device) / q_length
+#     h_p_expectation = torch.DoubleTensor([0.])
+#     h_q_expectation = torch.DoubleTensor([0.])
+#     with torch.no_grad():
+#         for data in p_loader:
+#             data = data[0][:,None].to(device)
+#             h_p_expectation += torch.sum(h(data).double() * p_length_inv).item()
 
-        for data in q_loader:
-            data = data[0][:,None].to(device)
-            h_q_expectation += torch.sum(h(data).double() * q_length_inv).item()
+#         for data in q_loader:
+#             data = data[0][:,None].to(device)
+#             h_q_expectation += torch.sum(h(data).double() * q_length_inv).item()
 
-    return (h_p_expectation - h_q_expectation).item()
+#     return (h_p_expectation - h_q_expectation).item()
 
 
-def estimate_wasserstein_kantorovich_rubinstein(samples_p, samples_q, device, eval_steps=1000,
-                                                bs=1024, eval_bs=2**15, optim='adam', lr=0.001,
-                                                schedule='none', steps=100_00):
-    h = FullyConnectedNet(1, 1)
-    h.to(device)
+# def estimate_wasserstein_kantorovich_rubinstein(samples_p, samples_q, device, eval_steps=1000,
+#                                                 bs=1024, eval_bs=2**15, optim='adam', lr=0.001,
+#                                                 schedule='none', steps=100_00):
+#     h = FullyConnectedNet(1, 1)
+#     h.to(device)
 
-    h = network_weight_matrices(h, 1)
+#     h = network_weight_matrices(h, 1)
 
-    if optim == 'sgd':
-        optimizer = torch.optim.SGD(h.parameters(), lr=lr, momentum=0.9)
-    elif optim == 'adam':
-        optimizer = torch.optim.Adam(h.parameters(), lr=lr)
-    else:
-        raise NotImplementedError()
+#     if optim == 'sgd':
+#         optimizer = torch.optim.SGD(h.parameters(), lr=lr, momentum=0.9)
+#     elif optim == 'adam':
+#         optimizer = torch.optim.Adam(h.parameters(), lr=lr)
+#     else:
+#         raise NotImplementedError()
 
-    if schedule == 'cosine':
-        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, steps)
-    elif schedule == 'none' or schedule is None:
-        scheduler = None
-    else:
-        raise NotImplementedError()
+#     if schedule == 'cosine':
+#         scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, steps)
+#     elif schedule == 'none' or schedule is None:
+#         scheduler = None
+#     else:
+#         raise NotImplementedError()
 
-    #prepare the dataset
-    obs = phi(observations)
-    next_observations = phi(next_observations)
+#     #prepare the dataset
+#     obs = phi(observations)
+#     next_observations = phi(next_observations)
 
-    for i in trange(steps):
+#     for i in trange(steps):
 
-        p_samples, q_samples = p_samples.to(device), q_samples.to(device)
+#         p_samples, q_samples = p_samples.to(device), q_samples.to(device)
 
-        optimizer.zero_grad()
-        output_p = h(p_samples)
-        output_q = h(q_samples)
+#         optimizer.zero_grad()
+#         output_p = h(p_samples)
+#         output_q = h(q_samples)
 
-        #minus loss as we have to maximize
-        loss = -(torch.mean(output_p) - torch.mean(output_q))
-        loss.backward()
-        optimizer.step()
+#         #minus loss as we have to maximize
+#         loss = -(torch.mean(output_p) - torch.mean(output_q))
+#         loss.backward()
+#         optimizer.step()
 
-        if scheduler is not None:
-            scheduler.step()
+#         if scheduler is not None:
+#             scheduler.step()
 
-        h = network_weight_matrices(h, 1)
+#         h = network_weight_matrices(h, 1)
 
-        if (i % eval_steps) == 0:
-            current_d_estimate = _eval_wasserstein_model(eval_p_loader, eval_q_loader, h, device)
-            print(f'Step {i}: Wasserstein-1 estimate {current_d_estimate:.5f}')
+#         if (i % eval_steps) == 0:
+#             current_d_estimate = _eval_wasserstein_model(eval_p_loader, eval_q_loader, h, device)
+#             print(f'Step {i}: Wasserstein-1 estimate {current_d_estimate:.5f}')
 
-    current_d_estimate = _eval_wasserstein_model(eval_p_loader, eval_q_loader, h, device)
-    print(f'Final Wasserstein-1 estimate {current_d_estimate:.5f}')
-    return current_d_estimate
+#     current_d_estimate = _eval_wasserstein_model(eval_p_loader, eval_q_loader, h, device)
+#     print(f'Final Wasserstein-1 estimate {current_d_estimate:.5f}')
+#     return current_d_estimate

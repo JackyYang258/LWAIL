@@ -1,37 +1,16 @@
+from pathlib import Path
+
 import gym
 import d4rl
 import torch
 import torch.nn as nn
 import torch.optim as optim
 import numpy as np
+from tqdm import trange
 
 from .utils import set_seed_everywhere
-from .network import PolicyNetwork, FullyConnectedNet, network_weight_matrices
-
-class PolicyNetwork(nn.Module):
-    def __init__(self, state_dim, action_dim):
-        super(PolicyNetwork, self).__init__()
-        self.fc1 = nn.Linear(state_dim, 128)
-        self.fc2 = nn.Linear(128, 128)
-        self.fc3 = nn.Linear(128, action_dim)
-        
-    def forward(self, x):
-        x = torch.relu(self.fc1(x))
-        x = torch.relu(self.fc2(x))
-        return torch.softmax(self.fc3(x), dim=-1)
-
-class f_Network(nn.Module):
-    def __init__(self, state_dim):
-        super(f_Network, self).__init__()
-        self.fc1 = nn.Linear(state_dim * 2, 128)
-        self.fc2 = nn.Linear(128, 128)
-        self.fc3 = nn.Linear(128, 1)
-        
-    def forward(self, state, next_state):
-        x = torch.cat((state, next_state), dim=1)
-        x = torch.relu(self.fc1(x))
-        x = torch.relu(self.fc2(x))
-        return self.fc3(x).squeeze()
+from .network import PolicyNetwork, FullyConnectedNet, network_weight_matrices, PhiNet
+from .d4rl import make_env, get_dataset
 
 def select_action(policy_net, state):
     state = torch.from_numpy(state).float().unsqueeze(0)
@@ -61,50 +40,66 @@ def train(actor_net, f_net, actor_optimizer, f_optimizer, trajectory, expert_tra
     actor_optimizer.step()
     
     # Update f network
-    target_optimizer.zero_grad()
+    f_optimizer.zero_grad()
     loss.backward()
-    target_optimizer.step()
+    f_optimizer.step()
 
-def main():
-    env = gym.make('hopper-medium-v2')  # Change to your desired D4RL environment
+def main(args):
+    # initialize environment
+    env = gym.make(args.env_name)  # Change to your desired D4RL environment
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     state_dim = env.observation_space.shape[0]
     action_dim = env.action_space.n
     
-    set_seed_everywhere(0)
+    env = make_env(args.env_name)
+    expert_dataset = get_dataset(env)
     
-    hidden_dims = [128, 128]
+    set_seed_everywhere(args.seed)
+    
+    # set up networks
+    hidden_dims = list(map(int, args.hidden_dim.split(',')))
     policy_net = PolicyNetwork(state_dim, action_dim)
     f_net = FullyConnectedNet(state_dim * 2, hidden_dims)
     f_net = network_weight_matrices(f_net, 1)
+    phi_net = PhiNet(icvf_hidden_dims)
+    phi_net.load_state_dict(torch.load(args.icvf_path))
+    for param in phi_net.parameters():
+        param.requires_grad = False
     
-    if optim == 'sgd':
-        policy_optimizer = torch.optim.SGD(policy_net.parameters(), lr=lr, momentum=0.9)
-        f_optimizer = torch.optim.SGD(f_net.parameters(), lr=lr, momentum=0.9)
-    elif optim == 'adam':
-        policy_optimizer = torch.optim.Adam(policy_net.parameters(), lr=lr)
-        f_optimizer = torch.optim.Adam(f_net.parameters(), lr=lr)
-        
+    if args.optimizer == 'sgd':
+        policy_optimizer = torch.optim.SGD(policy_net.parameters(), lr=args.lr, momentum=0.9)
+        f_optimizer = torch.optim.SGD(f_net.parameters(), lr=args.lr, momentum=0.9)
+    elif args.optimizer == 'adam':
+        policy_optimizer = torch.optim.Adam(policy_net.parameters(), lr=args.lr)
+        f_optimizer = torch.optim.Adam(f_net.parameters(), lr=args.lr)
     else:
         raise NotImplementedError()
     
-    # Example expert trajectory (you should load or generate this)
-    expert_trajectory = [
-        (np.random.rand(state_dim), np.random.rand(state_dim)) for _ in range(100)
-    ]
-
-    for episode in range(1000):
+    # train
+    for step in trange(args.n_steps):
         state = env.reset()
         trajectory = []
-        for t in range(100):
+        for t in range(args.batch_size):
             action, _ = select_action(policy_net, state)
             next_state, _, done, _ = env.step(action)
-            trajectory.append((state, next_state))
+            trajectory.append((state, action, next_state))
             state = next_state
             if done:
                 break
-        train(policy_net, f_net, policy_optimizer, f_optimizer, trajectory, expert_trajectory)
+        train(policy_net, f_net, policy_optimizer, f_optimizer, trajectory, expert_dataset) # to be modified
         f_net = network_weight_matrices(f_net, 1)
 
-if __name__ == "__main__":
-    main()
+if __name__ == '__main__':
+    from argparse import ArgumentParser
+    parser = ArgumentParser()
+    parser.add_argument('--env_name', default='hopper-medium-v2')
+    parser.add_argument('--lr', default=1e-3)
+    parser.add_argument('--n_steps', default=10**6)
+    parser.add_argument('--batch_size', default=256)
+    parser.add_argument('--optimizer', default='adam')
+    parser.add_argument('--seed', default=0)
+    parser.add_argument('--log_dir', default='logs')
+    parser.add_argument('--icvf_path', default='logs')
+    
+    parser.add_argument('--hidden_dim', default="256,256")
+    main(parser.parse_args())
