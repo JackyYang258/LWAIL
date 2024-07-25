@@ -12,12 +12,6 @@ from .utils import set_seed_everywhere
 from .network import PolicyNetwork, FullyConnectedNet, network_weight_matrices, PhiNet
 from .d4rl import make_env, get_dataset
 
-def select_action(policy_net, state):
-    state = torch.from_numpy(state).float().unsqueeze(0)
-    probs = policy_net(state)
-    action = np.random.choice(len(probs.squeeze()), p=probs.squeeze().detach().numpy())
-    return action, probs[:, action].item()
-
 def train(actor_net, f_net, actor_optimizer, f_optimizer, trajectory, expert_trajectory, gamma=0.99):
     states, next_states = zip(*trajectory)
     expert_states, expert_next_states = zip(*expert_trajectory)
@@ -61,6 +55,7 @@ def main(args):
     policy_net = PolicyNetwork(state_dim, action_dim)
     f_net = FullyConnectedNet(state_dim * 2, hidden_dims)
     f_net = network_weight_matrices(f_net, 1)
+    
     phi_net = PhiNet(icvf_hidden_dims)
     phi_net.load_state_dict(torch.load(args.icvf_path))
     for param in phi_net.parameters():
@@ -76,17 +71,18 @@ def main(args):
         raise NotImplementedError()
     
     # train
-    for step in trange(args.n_steps):
+    for step in trange(args.n_episode):
         state = env.reset()
         trajectory = []
         for t in range(args.batch_size):
-            action, _ = select_action(policy_net, state)
+            action, _ = policy_net(state)
             next_state, _, done, _ = env.step(action)
             trajectory.append((state, action, next_state))
             state = next_state
             if done:
                 break
         train(policy_net, f_net, policy_optimizer, f_optimizer, trajectory, expert_dataset) # to be modified
+        # todo:evaluation
         f_net = network_weight_matrices(f_net, 1)
 
 if __name__ == '__main__':

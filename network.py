@@ -1,9 +1,5 @@
-from collections import OrderedDict
-from tqdm import trange
-
 import torch
 import torch.nn as nn
-from torch.utils.data import TensorDataset, DataLoader
 
 class PolicyNetwork(nn.Module):
     def __init__(self, state_dim, action_dim):
@@ -54,15 +50,15 @@ def network_weight_matrices(model, max_norm, eps=1e-8):
     return model
 
 
-def _get_batch(iterator, loader):
-    try:
-        samples = next(iterator)
-    except StopIteration:
-        iterator = iter(loader)
-        samples = next(iterator)
+# def _get_batch(iterator, loader):
+#     try:
+#         samples = next(iterator)
+#     except StopIteration:
+#         iterator = iter(loader)
+#         samples = next(iterator)
 
-    samples = samples[0][:,None]
-    return samples, iterator
+#     samples = samples[0][:,None]
+#     return samples, iterator
 
 
 # def _eval_wasserstein_model(p_loader, q_loader, h, device):
