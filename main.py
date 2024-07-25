@@ -8,9 +8,12 @@ import torch.optim as optim
 import numpy as np
 from tqdm import trange
 
-from .utils import set_seed_everywhere
-from .network import PolicyNetwork, FullyConnectedNet, network_weight_matrices, PhiNet
-from .d4rl import make_env, get_dataset
+import sys
+sys.path.append('/scratch/bdaw/kaiyan289/intentDICE')
+from utils import set_seed_everywhere, select_stochastic_action
+from network import PolicyNetwork, FullyConnectedNet, network_weight_matrices, PhiNet
+from d4rl_uitls import make_env, get_dataset
+from buffer import ReplayBuffer
 
 def train(actor_net, f_net, actor_optimizer, f_optimizer, trajectory, expert_trajectory, gamma=0.99):
     states, next_states = zip(*trajectory)
@@ -37,6 +40,18 @@ def train(actor_net, f_net, actor_optimizer, f_optimizer, trajectory, expert_tra
     f_optimizer.zero_grad()
     loss.backward()
     f_optimizer.step()
+
+def collect_trajectory(env, policy_net, buffer, max_steps):
+    state = env.reset()
+    for _ in range(max_steps):
+        action, probs = select_stochastic_action(policy_net, state)
+        next_state, reward, done, _ = env.step(action)
+        transition = (state, next_state)
+        buffer.add(transition)
+        state = next_state
+
+        if done:
+            break
 
 def main(args):
     # initialize environment
@@ -70,18 +85,12 @@ def main(args):
     else:
         raise NotImplementedError()
     
+    buffer = ReplayBuffer(max_size=100000)
+    
     # train
     for step in trange(args.n_episode):
-        state = env.reset()
-        trajectory = []
-        for t in range(args.batch_size):
-            action, _ = policy_net(state)
-            next_state, _, done, _ = env.step(action)
-            trajectory.append((state, action, next_state))
-            state = next_state
-            if done:
-                break
-        train(policy_net, f_net, policy_optimizer, f_optimizer, trajectory, expert_dataset) # to be modified
+        collect_trajectory(env, policy_net, buffer, args.n_steps)
+        train(policy_net, f_net, policy_optimizer, f_optimizer, buffer, expert_dataset, args.batch_size) # to be modified
         # todo:evaluation
         f_net = network_weight_matrices(f_net, 1)
 
@@ -90,12 +99,13 @@ if __name__ == '__main__':
     parser = ArgumentParser()
     parser.add_argument('--env_name', default='hopper-medium-v2')
     parser.add_argument('--lr', default=1e-3)
-    parser.add_argument('--n_steps', default=10**6)
+    parser.add_argument('--n_episodes', default=10**6)
     parser.add_argument('--batch_size', default=256)
     parser.add_argument('--optimizer', default='adam')
     parser.add_argument('--seed', default=0)
     parser.add_argument('--log_dir', default='logs')
     parser.add_argument('--icvf_path', default='logs')
+    parser.add_argument('--n_steps', default=1000)
     
     parser.add_argument('--hidden_dim', default="256,256")
     main(parser.parse_args())
