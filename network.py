@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 
-class PolicyNetwork(nn.Module):
+class mlpNetwork(nn.Module):
     def __init__(self, state_dim, action_dim):
         super(PolicyNetwork, self).__init__()
         self.fc1 = nn.Linear(state_dim, 128)

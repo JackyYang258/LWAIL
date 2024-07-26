@@ -11,35 +11,11 @@ from tqdm import trange
 import sys
 sys.path.append('/scratch/bdaw/kaiyan289/intentDICE')
 from utils import set_seed_everywhere, select_stochastic_action
-from network import PolicyNetwork, FullyConnectedNet, network_weight_matrices, PhiNet
+from network import mlpNetwork, FullyConnectedNet, network_weight_matrices, PhiNet
 from d4rl_uitls import make_env, get_dataset
 from buffer import ReplayBuffer
+from algorithm import train
 
-def train(actor_net, f_net, actor_optimizer, f_optimizer, trajectory, expert_trajectory, gamma=0.99):
-    states, next_states = zip(*trajectory)
-    expert_states, expert_next_states = zip(*expert_trajectory)
-    
-    states = torch.tensor(states, dtype=torch.float)
-    next_states = torch.tensor(next_states, dtype=torch.float)
-    expert_states = torch.tensor(expert_states, dtype=torch.float)
-    expert_next_states = torch.tensor(expert_next_states, dtype=torch.float)
-    
-    # Compute target function values
-    f_values_sample = f_net(states, next_states)
-    f_values_expert = f_net(expert_states, expert_next_states)
-    
-    # Compute target loss
-    loss = f_values_sample.mean() - f_values_expert.mean()
-    
-    # Update actor using target loss
-    actor_optimizer.zero_grad()
-    loss.backward()
-    actor_optimizer.step()
-    
-    # Update f network
-    f_optimizer.zero_grad()
-    loss.backward()
-    f_optimizer.step()
 
 def collect_trajectory(env, policy_net, buffer, max_steps):
     state = env.reset()
@@ -67,7 +43,8 @@ def main(args):
     
     # set up networks
     hidden_dims = list(map(int, args.hidden_dim.split(',')))
-    policy_net = PolicyNetwork(state_dim, action_dim)
+    policy_net = mlpNetwork(state_dim, action_dim)
+    actor_net = mlpNetwork(state_dim, action_dim)
     f_net = FullyConnectedNet(state_dim * 2, hidden_dims)
     f_net = network_weight_matrices(f_net, 1)
     
@@ -90,6 +67,7 @@ def main(args):
     # train
     for step in trange(args.n_episode):
         collect_trajectory(env, policy_net, buffer, args.n_steps)
+        train(expert_dataset, buffer, f_net, actor_net, policy_net, f_optimizer, args.batch_size)
         train(policy_net, f_net, policy_optimizer, f_optimizer, buffer, expert_dataset, args.batch_size) # to be modified
         # todo:evaluation
         f_net = network_weight_matrices(f_net, 1)
