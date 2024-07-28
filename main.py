@@ -18,6 +18,7 @@ from algorithm import train
 
 
 def collect_trajectory(env, policy_net, buffer, max_steps):
+    buffer.clear()
     state = env.reset()
     for _ in range(max_steps):
         action, probs = select_stochastic_action(policy_net, state)
@@ -28,6 +29,7 @@ def collect_trajectory(env, policy_net, buffer, max_steps):
 
         if done:
             break
+    return buffer
 
 def main(args):
     # initialize environment
@@ -54,10 +56,8 @@ def main(args):
         param.requires_grad = False
     
     if args.optimizer == 'sgd':
-        policy_optimizer = torch.optim.SGD(policy_net.parameters(), lr=args.lr, momentum=0.9)
         f_optimizer = torch.optim.SGD(f_net.parameters(), lr=args.lr, momentum=0.9)
     elif args.optimizer == 'adam':
-        policy_optimizer = torch.optim.Adam(policy_net.parameters(), lr=args.lr)
         f_optimizer = torch.optim.Adam(f_net.parameters(), lr=args.lr)
     else:
         raise NotImplementedError()
@@ -67,10 +67,8 @@ def main(args):
     # train
     for step in trange(args.n_episode):
         collect_trajectory(env, policy_net, buffer, args.n_steps)
-        train(expert_dataset, buffer, f_net, actor_net, policy_net, f_optimizer, args.batch_size)
-        train(policy_net, f_net, policy_optimizer, f_optimizer, buffer, expert_dataset, args.batch_size) # to be modified
+        train(expert_dataset, buffer, f_net, actor_net, policy_net, phi_net, f_optimizer) 
         # todo:evaluation
-        f_net = network_weight_matrices(f_net, 1)
 
 if __name__ == '__main__':
     from argparse import ArgumentParser

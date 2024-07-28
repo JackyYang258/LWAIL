@@ -13,3 +13,6 @@ class ReplayBuffer:
     def sample(self, batch_size):
         indices = np.random.choice(len(self.buffer), batch_size)
         return [self.buffer[idx] for idx in indices]
+    
+    def clear():
+        self.buffer = []
