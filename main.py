@@ -11,77 +11,74 @@ from tqdm import trange
 import sys
 sys.path.append('/scratch/bdaw/kaiyan289/intentDICE')
 from utils import set_seed_everywhere, select_stochastic_action
-from network import mlpNetwork, FullyConnectedNet, network_weight_matrices, PhiNet
+from network import FullyConnectedNet, network_weight_matrices, PhiNet, PPOActor, Critic
 from d4rl_uitls import make_env, get_dataset
 from buffer import ReplayBuffer
-from algorithm import train
-
-
-def collect_trajectory(env, policy_net, buffer, max_steps):
-    buffer.clear()
-    state = env.reset()
-    for _ in range(max_steps):
-        action, probs = select_stochastic_action(policy_net, state)
-        next_state, reward, done, _ = env.step(action)
-        transition = (state, next_state)
-        buffer.add(transition)
-        state = next_state
-
-        if done:
-            break
-    return buffer
+from train import train
 
 def main(args):
     # initialize environment
     env = gym.make(args.env_name)  # Change to your desired D4RL environment
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     state_dim = env.observation_space.shape[0]
-    action_dim = env.action_space.n
+    action_dim = env.action_space.shape[0]
     
     env = make_env(args.env_name)
     expert_dataset = get_dataset(env)
     
     set_seed_everywhere(args.seed)
     
+    #print informations about the environment
+    print('state_dim:', state_dim)
+    print('action_dim:', action_dim)
+    print('observation_space:', env.observation_space)
+    print('action_space:', env.action_space)
+    
     # set up networks
     hidden_dims = list(map(int, args.hidden_dim.split(',')))
-    policy_net = mlpNetwork(state_dim, action_dim)
-    actor_net = mlpNetwork(state_dim, action_dim)
     f_net = FullyConnectedNet(state_dim * 2, hidden_dims)
     f_net = network_weight_matrices(f_net, 1)
     
-    phi_net = PhiNet(icvf_hidden_dims)
-    phi_net.load_state_dict(torch.load(args.icvf_path))
-    for param in phi_net.parameters():
-        param.requires_grad = False
-    
-    if args.optimizer == 'sgd':
-        f_optimizer = torch.optim.SGD(f_net.parameters(), lr=args.lr, momentum=0.9)
-    elif args.optimizer == 'adam':
-        f_optimizer = torch.optim.Adam(f_net.parameters(), lr=args.lr)
+    if args.using_icvf:
+        phi_net = PhiNet(icvf_hidden_dims)
+        phi_net.load_state_dict(torch.load(args.icvf_path))
+        for param in phi_net.parameters():
+            param.requires_grad = False
+        print('Using ICVF')
     else:
-        raise NotImplementedError()
+        print('Not using ICVF')
     
-    buffer = ReplayBuffer(max_size=100000)
-    
-    # train
-    for step in trange(args.n_episode):
-        collect_trajectory(env, policy_net, buffer, args.n_steps)
-        train(expert_dataset, buffer, f_net, actor_net, policy_net, phi_net, f_optimizer) 
-        # todo:evaluation
+    train(expert_dataset, f_net, phi_net, env, args.seed, args.max_ep_len, args.max_training_timesteps,args.update_timestep, args.f_epoch, args.lr_f, args.action_std_decay_frequency, args.action_std_decay_rate, args.min_action_std, state_dim, action_dim, args.lr_actor, args.lr_critic, args.gamma, args.ppo_epochs, args.eps_clip, args.action_std_init)
+
+
 
 if __name__ == '__main__':
     from argparse import ArgumentParser
     parser = ArgumentParser()
-    parser.add_argument('--env_name', default='hopper-medium-v2')
-    parser.add_argument('--lr', default=1e-3)
-    parser.add_argument('--n_episodes', default=10**6)
-    parser.add_argument('--batch_size', default=256)
-    parser.add_argument('--optimizer', default='adam')
-    parser.add_argument('--seed', default=0)
-    parser.add_argument('--log_dir', default='logs')
-    parser.add_argument('--icvf_path', default='logs')
-    parser.add_argument('--n_steps', default=1000)
     
-    parser.add_argument('--hidden_dim', default="256,256")
+    # Environment
+    parser.add_argument('--env_name', type=str, default='maze2d-open-dense-v0', help='Name of the environment to use.')
+    parser.add_argument('--seed', type=int, default=0, help='Random seed for reproducibility.')
+
+    parser.add_argument('--icvf_path', type=str, default=None, help='Path to the ICVF model checkpoint.')
+    parser.add_argument('--using_icvf', default=False, help='Flag to indicate whether to use ICVF.')
+    
+    # Important Training arguments
+    parser.add_argument('--max_training_timesteps', type=int, default=1e6, help='Maximum number of timesteps for training.')
+    parser.add_argument('--f_epoch', type=int, default=10, help='Number of epochs for training the function network.')
+    parser.add_argument('--ppo_epochs', type=int, default=80, help='Number of epochs for PPO training.')
+    parser.add_argument('--lr_f', type=float, default=1e-3, help='Learning rate for the function network.')
+    parser.add_argument('--lr_actor', type=float, default=3e-4, help='Learning rate for the actor network.')
+    parser.add_argument('--lr_critic', type=float, default=1e-3, help='Learning rate for the critic network.')
+    
+    
+    parser.add_argument('--hidden_dim', type=str, default='256,256', help='Comma-separated list of hidden dimensions for the network.')
+    parser.add_argument('--max_ep_len', type=int, default=1000, help='Maximum length of each episode.')
+    parser.add_argument('--update_timestep', type=int, default=4000, help='Number of timesteps between updates.')
+    parser.add_argument('--gamma', type=float, default=0.99, help='Discount factor for rewards.')
+    parser.add_argument('--eps_clip', type=float, default=0.2, help='Clip parameter for PPO.')
+    parser.add_argument('--action_std_decay_frequency', type=int, default=int(2e5), help='Frequency of action standard deviation decay.')
+    parser.add_argument('--action_std_decay_rate', type=float, default=0.05, help='Decay rate of the action standard deviation.')
+    parser.add_argument('--min_action_std', type=float, default=0.1, help='Minimum value of action standard deviation.')
+    parser.add_argument('--action_std_init', type=float, default=0.6, help='Initial standard deviation of action distribution.')
     main(parser.parse_args())
