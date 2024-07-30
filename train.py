@@ -1,9 +1,23 @@
 import torch
 from network import network_weight_matrices
 from ppo import PPO
+import icecream as ic
+import datetime
+def time():
+    # Get the current time
+    current_time = datetime.datetime.now()
+
+    # Format the current time
+    formatted_time = current_time.strftime("%H:%M:%S")
+
+    # Print the formatted time
+    print("Current Time:", formatted_time)
+
+using_ICVF = False
 
 def train(expert_buffer, f_net, phi, env, seed, max_ep_len, max_training_timesteps, update_timestep, f_epoch, lr_f, action_std_decay_frequency, action_std_decay_rate, min_action_std, state_dim, action_dim, lr_actor, lr_critic, gamma, ppo_epochs, eps_clip, action_std_init=0.6):
     # def __init__(self, state_dim, action_dim, lr_actor, lr_critic, gamma, K_epochs, eps_clip, action_std_init=0.6):
+    time()
     agent = PPO(state_dim, action_dim, lr_actor, lr_critic, gamma, ppo_epochs, eps_clip, action_std_init)
     
     f_optimizer = torch.optim.Adam(f_net.parameters(), lr=lr_f)
@@ -11,7 +25,7 @@ def train(expert_buffer, f_net, phi, env, seed, max_ep_len, max_training_timeste
     time_step = 0
     while time_step <= max_training_timesteps:
         
-        state, _ = env.reset(seed=seed)
+        state = env.reset()
         current_ep_reward = 0
         
         for step in range(1, max_ep_len + 1):
@@ -27,12 +41,20 @@ def train(expert_buffer, f_net, phi, env, seed, max_ep_len, max_training_timeste
             
             # update if its time
             if time_step % update_timestep == 0:
-                s1, s1_prime = expert_buffer['states'], expert_buffer['next_states']
-                s2, s2_prime = agent.buffer['states'], agent.buffer['next_states']
+                print(agent.device)
+                s1 = torch.tensor(expert_buffer['observations']).to(agent.device)
+                s1_prime = torch.tensor(expert_buffer['next_observations']).to(agent.device)
+                s2 = torch.squeeze(torch.stack(agent.buffer.states, dim=0)).detach().to(agent.device)
+                print("s2",s2.shape)
+                s2_prime = torch.squeeze(torch.stack(agent.buffer.states, dim=0)).detach().to(agent.device)
                 for f_step in range(1, f_epoch):
                     # Calculate the loss
-                    loss_f = (torch.mean(f_net(phi(s2), phi(s2_prime))) - 
-                            torch.mean(f_net(phi(s1), phi(s1_prime))))
+                    
+                    if using_ICVF:
+                        loss_f = (torch.mean(f_net(phi(s2), phi(s2_prime))) - 
+                                torch.mean(f_net(phi(s1), phi(s1_prime))))
+                    else:
+                        loss_f = (torch.mean(f_net(s2, s2_prime)) - torch.mean(f_net(s1, s1_prime)))
                     
                     # Optimize f_net by minimizing loss_f
                     f_net.zero_grad()

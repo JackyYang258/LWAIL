@@ -1,12 +1,11 @@
 import torch
 import torch.nn as nn
 
-
 class FullyConnectedNet(nn.Module):
     def __init__(self, input_dim: int, hidden_dims, activation=nn.ReLU, activate_final=False):
         super(FullyConnectedNet, self).__init__()
         layers = []
-        current_dim = input_dim
+        current_dim = input_dim  # Since we will concatenate two inputs
         for dim in hidden_dims:
             layers.append(nn.Linear(current_dim, dim))
             layers.append(activation())
@@ -16,9 +15,11 @@ class FullyConnectedNet(nn.Module):
             layers.append(activation())
         self.net = nn.Sequential(*layers)
 
-    def forward(self, x):
+    def forward(self, x1, x2):
+        # Concatenate the inputs along the feature dimension
+        x = torch.cat((x1, x2), dim=-1)
+        print("x",x.shape)
         return self.net(x)
-    
 class PhiNet(nn.Module):
     def __init__(self, hidden_dims, activation=nn.GELU, activate_final=False):
         super(PhiNet, self).__init__()

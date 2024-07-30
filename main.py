@@ -1,25 +1,30 @@
-from pathlib import Path
+import datetime
+def time():
+    # Get the current time
+    current_time = datetime.datetime.now()
+
+    # Format the current time
+    formatted_time = current_time.strftime("%H:%M:%S")
+
+    # Print the formatted time
+    print("Current Time:", formatted_time)
+
+time()
 
 import gym
-import d4rl
 import torch
-import torch.nn as nn
-import torch.optim as optim
-import numpy as np
-from tqdm import trange
 
 import sys
 sys.path.append('/scratch/bdaw/kaiyan289/intentDICE')
-from utils import set_seed_everywhere, select_stochastic_action
-from network import FullyConnectedNet, network_weight_matrices, PhiNet, PPOActor, Critic
+from utils import set_seed_everywhere
+from network import FullyConnectedNet, network_weight_matrices, PhiNet
 from d4rl_uitls import make_env, get_dataset
-from buffer import ReplayBuffer
 from train import train
 
 def main(args):
+    time()
     # initialize environment
     env = gym.make(args.env_name)  # Change to your desired D4RL environment
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     state_dim = env.observation_space.shape[0]
     action_dim = env.action_space.shape[0]
     
@@ -34,9 +39,10 @@ def main(args):
     print('observation_space:', env.observation_space)
     print('action_space:', env.action_space)
     
+    time()
     # set up networks
     hidden_dims = list(map(int, args.hidden_dim.split(',')))
-    f_net = FullyConnectedNet(state_dim * 2, hidden_dims)
+    f_net = FullyConnectedNet(state_dim * 2, hidden_dims).to('cuda:0')
     f_net = network_weight_matrices(f_net, 1)
     
     if args.using_icvf:
@@ -46,6 +52,7 @@ def main(args):
             param.requires_grad = False
         print('Using ICVF')
     else:
+        phi_net = None
         print('Not using ICVF')
     
     train(expert_dataset, f_net, phi_net, env, args.seed, args.max_ep_len, args.max_training_timesteps,args.update_timestep, args.f_epoch, args.lr_f, args.action_std_decay_frequency, args.action_std_decay_rate, args.min_action_std, state_dim, action_dim, args.lr_actor, args.lr_critic, args.gamma, args.ppo_epochs, args.eps_clip, args.action_std_init)

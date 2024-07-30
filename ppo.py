@@ -115,6 +115,7 @@ class PPO:
         self.policy_old.load_state_dict(self.policy.state_dict())
         
         self.MseLoss = nn.MSELoss()
+        self.device = device
 
     def set_action_std(self, new_action_std):
         self.action_std = new_action_std
