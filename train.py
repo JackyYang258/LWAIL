@@ -1,17 +1,10 @@
 import torch
+from tqdm import tqdm
+
 from network import network_weight_matrices
 from ppo import PPO
+from utils import time
 import icecream as ic
-import datetime
-def time():
-    # Get the current time
-    current_time = datetime.datetime.now()
-
-    # Format the current time
-    formatted_time = current_time.strftime("%H:%M:%S")
-
-    # Print the formatted time
-    print("Current Time:", formatted_time)
 
 using_ICVF = False
 
@@ -28,11 +21,11 @@ def train(expert_buffer, f_net, phi, env, seed, max_ep_len, max_training_timeste
         state = env.reset()
         current_ep_reward = 0
         
-        for step in range(1, max_ep_len + 1):
+        for step in tqdm(range(1, max_ep_len + 1)):
             action = agent.select_action(state)
             next_state, reward, done, _ = env.step(action)
             
-            agent.buffer.next_states.append(next_state)
+            agent.buffer.next_states.append(torch.tensor(next_state))
             agent.buffer.rewards.append(reward)
             agent.buffer.is_terminals.append(done)
             
@@ -41,12 +34,12 @@ def train(expert_buffer, f_net, phi, env, seed, max_ep_len, max_training_timeste
             
             # update if its time
             if time_step % update_timestep == 0:
-                print(agent.device)
+                
                 s1 = torch.tensor(expert_buffer['observations']).to(agent.device)
                 s1_prime = torch.tensor(expert_buffer['next_observations']).to(agent.device)
                 s2 = torch.squeeze(torch.stack(agent.buffer.states, dim=0)).detach().to(agent.device)
-                print("s2",s2.shape)
                 s2_prime = torch.squeeze(torch.stack(agent.buffer.states, dim=0)).detach().to(agent.device)
+                
                 for f_step in range(1, f_epoch):
                     # Calculate the loss
                     
@@ -64,7 +57,10 @@ def train(expert_buffer, f_net, phi, env, seed, max_ep_len, max_training_timeste
                     f_net = network_weight_matrices(f_net, 1)
                 
                 # agent.buffer.rewards = f_net(s,s')
-                agent.buffer.rewards = f_net(agent.buffer.states, agent.buffer.next_states)
+                tensor_states = torch.stack(agent.buffer.states).to(agent.device).float()
+                tensor_next_states = torch.stack(agent.buffer.next_states).to(agent.device).float()
+                agent.buffer.rewards = f_net(tensor_states, tensor_next_states).tolist()
+                print(agent.buffer.rewards)
                 
                 agent.update()
                 agent.buffer.clear()

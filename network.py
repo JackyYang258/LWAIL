@@ -18,7 +18,6 @@ class FullyConnectedNet(nn.Module):
     def forward(self, x1, x2):
         # Concatenate the inputs along the feature dimension
         x = torch.cat((x1, x2), dim=-1)
-        print("x",x.shape)
         return self.net(x)
 class PhiNet(nn.Module):
     def __init__(self, hidden_dims, activation=nn.GELU, activate_final=False):
