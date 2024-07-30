@@ -19,6 +19,7 @@ class FullyConnectedNet(nn.Module):
         # Concatenate the inputs along the feature dimension
         x = torch.cat((x1, x2), dim=-1)
         return self.net(x)
+
 class PhiNet(nn.Module):
     def __init__(self, hidden_dims, activation=nn.GELU, activate_final=False):
         super(PhiNet, self).__init__()

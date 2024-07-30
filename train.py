@@ -15,13 +15,15 @@ def train(expert_buffer, f_net, phi, env, seed, max_ep_len, max_training_timeste
     
     f_optimizer = torch.optim.Adam(f_net.parameters(), lr=lr_f)
     
+    print_freq = 10000
     time_step = 0
+    i_episode = 0
     while time_step <= max_training_timesteps:
         
         state = env.reset()
         current_ep_reward = 0
         
-        for step in tqdm(range(1, max_ep_len + 1)):
+        for step in range(1, max_ep_len + 1):
             action = agent.select_action(state)
             next_state, reward, done, _ = env.step(action)
             
@@ -59,17 +61,34 @@ def train(expert_buffer, f_net, phi, env, seed, max_ep_len, max_training_timeste
                 # agent.buffer.rewards = f_net(s,s')
                 tensor_states = torch.stack(agent.buffer.states).to(agent.device).float()
                 tensor_next_states = torch.stack(agent.buffer.next_states).to(agent.device).float()
-                agent.buffer.rewards = f_net(tensor_states, tensor_next_states).tolist()
-                print(agent.buffer.rewards)
+                agent.buffer.rewards = f_net(tensor_states, tensor_next_states).view(-1).tolist()
                 
                 agent.update()
                 agent.buffer.clear()
                 
             if time_step % action_std_decay_frequency == 0:
                 agent.decay_action_std(action_std_decay_rate, min_action_std)
+            
+            if time_step % print_freq == 0:
+                print_avg_reward = print_running_reward / print_running_episodes
+                print_avg_reward = round(print_avg_reward, 2)
+
+                print("Episode : {} \t\t Timestep : {} \t\t Average Reward : {}".format(i_episode, time_step, print_avg_reward))
+
+                print_running_reward = 0
+                print_running_episodes = 0
                 
             if done:
                 break
+
+        print_running_reward += current_ep_reward
+        print_running_episodes += 1
+
+        # log_running_reward += current_ep_reward
+        # log_running_episodes += 1
+
+        i_episode += 1
+        
     
     # evaluation
 

@@ -148,8 +148,6 @@ class PPO:
         for reward, is_terminal in zip(reversed(self.buffer.rewards), reversed(self.buffer.is_terminals)):
             if is_terminal:
                 discounted_reward = 0
-            print("reward", reward)
-            print("discounted_reward", discounted_reward)
             discounted_reward = reward + (self.gamma * discounted_reward)
             rewards.insert(0, discounted_reward)
             
