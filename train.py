@@ -55,7 +55,6 @@ def train(expert_buffer, f_net, phi, env, seed, max_ep_len, max_training_timeste
                     else:
                         loss_f = (torch.mean(f_net(s2, s2_prime)) - torch.mean(f_net(s1, s1_prime)))
                     
-                    loss_f = loss_f ** 2
                     # Optimize f_net by minimizing loss_f
                     f_net.zero_grad()
                     loss_f.backward()
@@ -69,13 +68,12 @@ def train(expert_buffer, f_net, phi, env, seed, max_ep_len, max_training_timeste
                             torch.mean(f_net(phi(s1), phi(s1_prime))))
                 else:
                     loss_f = (torch.mean(f_net(s2, s2_prime)) - torch.mean(f_net(s1, s1_prime)))
-                loss_f = loss_f ** 2
                 print(f'f_loss: {loss_f.item()}')
                                 
                 # agent.buffer.rewards = f_net(s,s')
                 tensor_states = torch.stack(agent.buffer.states).to(agent.device).float()
                 tensor_next_states = torch.stack(agent.buffer.next_states).to(agent.device).float()
-                agent.buffer.rewards = f_net(tensor_states, tensor_next_states).view(-1).tolist()
+                agent.buffer.rewards = -f_net(tensor_states, tensor_next_states).view(-1).tolist()
                 
                 agent.update()
                 agent.buffer.clear()
