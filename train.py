@@ -73,7 +73,7 @@ def train(expert_buffer, f_net, phi, env, seed, max_ep_len, max_training_timeste
                 # agent.buffer.rewards = f_net(s,s')
                 tensor_states = torch.stack(agent.buffer.states).to(agent.device).float()
                 tensor_next_states = torch.stack(agent.buffer.next_states).to(agent.device).float()
-                agent.buffer.rewards = -f_net(tensor_states, tensor_next_states).view(-1).tolist()
+                agent.buffer.rewards = (-f_net(tensor_states, tensor_next_states)).view(-1).tolist()
                 
                 agent.update()
                 agent.buffer.clear()
