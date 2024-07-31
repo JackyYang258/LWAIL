@@ -18,6 +18,10 @@ def train(expert_buffer, f_net, phi, env, seed, max_ep_len, max_training_timeste
     print_freq = 10000
     time_step = 0
     i_episode = 0
+    
+    print_running_reward = 0
+    print_running_episodes = 0
+    
     while time_step <= max_training_timesteps:
         
         state = env.reset()
@@ -51,13 +55,23 @@ def train(expert_buffer, f_net, phi, env, seed, max_ep_len, max_training_timeste
                     else:
                         loss_f = (torch.mean(f_net(s2, s2_prime)) - torch.mean(f_net(s1, s1_prime)))
                     
+                    loss_f = loss_f ** 2
                     # Optimize f_net by minimizing loss_f
                     f_net.zero_grad()
                     loss_f.backward()
                     f_optimizer.step()
                     
                     f_net = network_weight_matrices(f_net, 1)
-                
+                    
+                # evluate the f-loss
+                if using_ICVF:
+                    loss_f = (torch.mean(f_net(phi(s2), phi(s2_prime))) - 
+                            torch.mean(f_net(phi(s1), phi(s1_prime))))
+                else:
+                    loss_f = (torch.mean(f_net(s2, s2_prime)) - torch.mean(f_net(s1, s1_prime)))
+                loss_f = loss_f ** 2
+                print(f'f_loss: {loss_f.item()}')
+                                
                 # agent.buffer.rewards = f_net(s,s')
                 tensor_states = torch.stack(agent.buffer.states).to(agent.device).float()
                 tensor_next_states = torch.stack(agent.buffer.next_states).to(agent.device).float()
