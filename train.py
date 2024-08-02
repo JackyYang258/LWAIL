@@ -28,6 +28,8 @@ def train(expert_buffer, f_net, phi, env, seed, max_ep_len, max_training_timeste
     timesteps = []
     avg_score = []
     normalized_scores = []
+    f_loss_record = []
+    time_step_f = []
     
     print_running_reward = 0
     print_running_episodes = 0
@@ -79,15 +81,17 @@ def train(expert_buffer, f_net, phi, env, seed, max_ep_len, max_training_timeste
                 else:
                     loss_f = (torch.mean(f_net(s2, s2_prime)) - torch.mean(f_net(s1, s1_prime)))
                 print(f'f_loss: {loss_f.item()}')
+                f_loss_record.append(loss_f.item())
+                time_step_f.append(time_step)
                                 
                 # agent.buffer.rewards = f_net(s,s')
                 tensor_states = torch.stack(agent.buffer.states).to(agent.device).float()
                 tensor_next_states = torch.stack(agent.buffer.next_states).to(agent.device).float()
                 if f_step == f_epoch and time_step > 5000:
-                    print("before",agent.buffer.rewards)
+                    print("before",agent.buffer.rewards[0:101])
                 agent.buffer.rewards = (-f_net(tensor_states, tensor_next_states)).view(-1).tolist()
                 if f_step == f_epoch and time_step > 5000:
-                    print("after",agent.buffer.rewards)
+                    print("after",agent.buffer.rewards[0:101])
                 agent.update()
                 agent.buffer.clear()
                 
@@ -169,5 +173,14 @@ def train(expert_buffer, f_net, phi, env, seed, max_ep_len, max_training_timeste
     plt.legend()
     plt.title('Normalized Average Score vs Timesteps')
     plt.savefig('./log/normalized_average_score_vs_timesteps.png')
+    plt.show()
+    
+    plt.figure(figsize=(12, 6))
+    plt.plot(time_step_f, f_loss_record, label='f-loss')
+    plt.xlabel('Timesteps')
+    plt.ylabel('f-loss')
+    plt.legend()
+    plt.title('f-loss vs timesteps')
+    plt.savefig('./log/f-loss.png')
     plt.show()
 
