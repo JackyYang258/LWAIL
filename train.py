@@ -56,7 +56,7 @@ def train(expert_buffer, f_net, phi, env, seed, max_ep_len, max_training_timeste
                 s2 = torch.squeeze(torch.stack(agent.buffer.states, dim=0)).detach().to(agent.device)
                 s2_prime = torch.squeeze(torch.stack(agent.buffer.states, dim=0)).detach().to(agent.device)
                 
-                for f_step in range(1, f_epoch):
+                for f_step in range(1, f_epoch + 1):
                     # Calculate the loss
                     
                     if using_ICVF:
@@ -83,8 +83,11 @@ def train(expert_buffer, f_net, phi, env, seed, max_ep_len, max_training_timeste
                 # agent.buffer.rewards = f_net(s,s')
                 tensor_states = torch.stack(agent.buffer.states).to(agent.device).float()
                 tensor_next_states = torch.stack(agent.buffer.next_states).to(agent.device).float()
+                if f_step == f_epoch and time_step > 5000:
+                    print("before",agent.buffer.rewards)
                 agent.buffer.rewards = (-f_net(tensor_states, tensor_next_states)).view(-1).tolist()
-                
+                if f_step == f_epoch and time_step > 5000:
+                    print("after",agent.buffer.rewards)
                 agent.update()
                 agent.buffer.clear()
                 
@@ -145,7 +148,7 @@ def train(expert_buffer, f_net, phi, env, seed, max_ep_len, max_training_timeste
             print(f"Episode {i+1}:")
             for state, distance in zip(episode_states, episode_rewards):
                 print(f"State: {state}, Reward: {distance}")
-    evaluate_policy(agent, env.spec.id)
+    # evaluate_policy(agent, env.spec.id)
 
     
     # evaluation
