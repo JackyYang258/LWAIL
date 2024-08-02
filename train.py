@@ -5,19 +5,29 @@ from network import network_weight_matrices
 from ppo import PPO
 from utils import time
 import icecream as ic
+import d4rl
+import os
+import matplotlib.pyplot as plt
+import gym
 
 using_ICVF = False
 
 def train(expert_buffer, f_net, phi, env, seed, max_ep_len, max_training_timesteps, update_timestep, f_epoch, lr_f, action_std_decay_frequency, action_std_decay_rate, min_action_std, state_dim, action_dim, lr_actor, lr_critic, gamma, ppo_epochs, eps_clip, action_std_init=0.6):
     # def __init__(self, state_dim, action_dim, lr_actor, lr_critic, gamma, K_epochs, eps_clip, action_std_init=0.6):
     time()
+    os.makedirs('./log', exist_ok=True)
+    
     agent = PPO(state_dim, action_dim, lr_actor, lr_critic, gamma, ppo_epochs, eps_clip, action_std_init)
     
     f_optimizer = torch.optim.Adam(f_net.parameters(), lr=lr_f)
     
-    print_freq = 10000
+    eval_freq = 10000
     time_step = 0
     i_episode = 0
+    
+    timesteps = []
+    avg_score = []
+    normalized_scores = []
     
     print_running_reward = 0
     print_running_episodes = 0
@@ -81,12 +91,16 @@ def train(expert_buffer, f_net, phi, env, seed, max_ep_len, max_training_timeste
             if time_step % action_std_decay_frequency == 0:
                 agent.decay_action_std(action_std_decay_rate, min_action_std)
             
-            if time_step % print_freq == 0:
-                print_avg_reward = print_running_reward / print_running_episodes
-                print_avg_reward = round(print_avg_reward, 2)
-
-                print("Episode : {} \t\t Timestep : {} \t\t Average Reward : {}".format(i_episode, time_step, print_avg_reward))
-
+            if time_step % eval_freq == 0:
+                avg_reward = round(print_running_reward / print_running_episodes, 2)
+                print(env.spec.id)
+                normalized_score = d4rl.get_normalized_score(env.spec.id, avg_reward)
+                print("Episode : {} \t\t Timestep : {} \t\t Average Score : {}".format(i_episode, time_step, avg_reward))
+                print("Episode : {} \t\t Timestep : {} \t\t Normalized Average Score : {}".format(i_episode, time_step, normalized_score))
+                
+                timesteps.append(time_step)
+                avg_score.append(avg_reward)
+                normalized_scores.append(normalized_score)
                 print_running_reward = 0
                 print_running_episodes = 0
                 
@@ -102,5 +116,55 @@ def train(expert_buffer, f_net, phi, env, seed, max_ep_len, max_training_timeste
         i_episode += 1
         
     
+    def evaluate_policy(agent, env_name, goal_state=None, num_episodes=3):
+        env = gym.make(env_name)
+        all_states = []
+        all_rewards = []
+
+        for episode in range(num_episodes):
+            state = env.reset()
+            done = False
+            episode_states = []
+            episode_rewards = []
+
+            for step in range(1, 1000 + 1):
+                action = agent.select_action(state)
+                next_state, reward, done, _ = env.step(action)
+                episode_states.append(state)
+                episode_rewards.append(reward)
+                state = next_state
+                if done:
+                    break
+
+            all_states.append(episode_states)
+            all_rewards.append(episode_rewards)
+
+        env.close()
+        print("Visited states and distances to goal in each episode:")
+        for i, (episode_states, episode_rewards) in enumerate(zip(all_states, all_rewards)):
+            print(f"Episode {i+1}:")
+            for state, distance in zip(episode_states, episode_rewards):
+                print(f"State: {state}, Reward: {distance}")
+    evaluate_policy(agent, env.spec.id)
+
+    
     # evaluation
+    plt.figure(figsize=(12, 6))
+    plt.plot(timesteps, avg_score, label='Average Score')
+    plt.xlabel('Timesteps')
+    plt.ylabel('Average Score')
+    plt.legend()
+    plt.title('Average Score vs Timesteps')
+    plt.savefig('./log/average_score_vs_timesteps.png')
+    plt.show()
+    
+    # Plotting the normalized average score
+    plt.figure(figsize=(12, 6))
+    plt.plot(timesteps, normalized_scores, label='Normalized Average Score')
+    plt.xlabel('Timesteps')
+    plt.ylabel('Normalized Average Score')
+    plt.legend()
+    plt.title('Normalized Average Score vs Timesteps')
+    plt.savefig('./log/normalized_average_score_vs_timesteps.png')
+    plt.show()
 
