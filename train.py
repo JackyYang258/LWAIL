@@ -58,6 +58,8 @@ def train(expert_buffer, f_net, phi, env, seed, max_ep_len, max_training_timeste
                 s2 = torch.squeeze(torch.stack(agent.buffer.states, dim=0)).detach().to(agent.device)
                 s2_prime = torch.squeeze(torch.stack(agent.buffer.states, dim=0)).detach().to(agent.device)
                 
+                previous_loss_f = float('inf')
+                converged = False
                 for f_step in range(1, f_epoch + 1):
                     # Calculate the loss
                     
@@ -67,6 +69,19 @@ def train(expert_buffer, f_net, phi, env, seed, max_ep_len, max_training_timeste
                     else:
                         loss_f = (torch.mean(f_net(s2, s2_prime)) - torch.mean(f_net(s1, s1_prime)))
                     
+                    if converged and abs(previous_loss_f - loss_f) < 1e-3:
+                        print(f'Converged at step {f_step}')
+                        break
+                    else:
+                        converged = False
+                    
+                    if abs(previous_loss_f - loss_f) < 1e-5:
+                        converged = True
+                        print("1")
+                        break
+                        
+                        
+                    previous_loss_f = loss_f.item()
                     # Optimize f_net by minimizing loss_f
                     f_net.zero_grad()
                     loss_f.backward()
@@ -87,11 +102,12 @@ def train(expert_buffer, f_net, phi, env, seed, max_ep_len, max_training_timeste
                 # agent.buffer.rewards = f_net(s,s')
                 tensor_states = torch.stack(agent.buffer.states).to(agent.device).float()
                 tensor_next_states = torch.stack(agent.buffer.next_states).to(agent.device).float()
-                if f_step == f_epoch and time_step > 5000:
-                    print("before",agent.buffer.rewards[0:101])
+                
+                if time_step > 5000:
+                    print("before",agent.buffer.rewards[500:510])
                 agent.buffer.rewards = (-f_net(tensor_states, tensor_next_states)).view(-1).tolist()
-                if f_step == f_epoch and time_step > 5000:
-                    print("after",agent.buffer.rewards[0:101])
+                if time_step > 5000:
+                    print("after",agent.buffer.rewards[500:510])
                 agent.update()
                 agent.buffer.clear()
                 
@@ -100,7 +116,6 @@ def train(expert_buffer, f_net, phi, env, seed, max_ep_len, max_training_timeste
             
             if time_step % eval_freq == 0:
                 avg_reward = round(print_running_reward / print_running_episodes, 2)
-                print(env.spec.id)
                 normalized_score = d4rl.get_normalized_score(env.spec.id, avg_reward)
                 print("Episode : {} \t\t Timestep : {} \t\t Average Score : {}".format(i_episode, time_step, avg_reward))
                 print("Episode : {} \t\t Timestep : {} \t\t Normalized Average Score : {}".format(i_episode, time_step, normalized_score))
