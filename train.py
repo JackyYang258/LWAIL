@@ -64,10 +64,9 @@ def train(expert_buffer, f_net, phi, env, seed, max_ep_len, max_training_timeste
                     # Calculate the loss
                     
                     if using_ICVF:
-                        loss_f = (torch.mean(f_net(phi(s2), phi(s2_prime))) - 
-                                torch.mean(f_net(phi(s1), phi(s1_prime))))
+                        loss_f = (torch.mean(f_net(phi(s1), phi(s1_prime))) - torch.mean(f_net(phi(s2), phi(s2_prime))))
                     else:
-                        loss_f = (torch.mean(f_net(s2, s2_prime)) - torch.mean(f_net(s1, s1_prime)))
+                        loss_f = (torch.mean(f_net(s1, s1_prime) )- torch.mean(f_net(s2, s2_prime)))
                     
                     if converged and abs(previous_loss_f - loss_f) < 1e-3:
                         print(f'Converged at step {f_step}')
@@ -108,6 +107,42 @@ def train(expert_buffer, f_net, phi, env, seed, max_ep_len, max_training_timeste
                 agent.buffer.rewards = (-f_net(tensor_states, tensor_next_states)).view(-1).tolist()
                 if time_step > 5000:
                     print("after",agent.buffer.rewards[500:510])
+                if time_step > 180000:
+                    # 定义初始状态
+                    initial_state = torch.tensor([0.5, 0.5, 0.0, 0.0])  # 位置 (0.5, 0.5) 速度 (0, 0)
+
+                    # 定义微小的扰动，包括零扰动
+                    perturbations = torch.tensor([
+                        [-0.01, 0.0, 0.0, 0.0],   # 左
+                        [0.0, 0.01, 0.0, 0.0],    # 上
+                        [0.01, 0.0, 0.0, 0.0],    # 右
+                        [0.0, -0.01, 0.0, 0.0],   # 下
+                        [0.01, 0.01, 0.0, 0.0],   # 右上
+                        [-0.01, -0.01, 0.0, 0.0], # 左下
+                        [0.01, -0.01, 0.0, 0.0],  # 右下
+                        [-0.01, 0.01, 0.0, 0.0],  # 左上
+                        [0.0, 0.0, 0.0, 0.0]      # 中心
+                    ])
+
+                    # 获取 f_net 的结果并存储
+                    results = []
+                    for perturbation in perturbations:
+                        next_state = initial_state + perturbation
+                        output_state = -f_net(initial_state.unsqueeze(0).to(agent.device), next_state.unsqueeze(0).to(agent.device)).item()
+                        results.append(output_state)
+
+                    # 打印结果为 3x3 矩阵格式
+                    matrix = [
+                        results[7], results[1], results[4],
+                        results[0], results[8], results[2],
+                        results[5], results[3], results[6]
+                    ]
+
+                    print("[")
+                    for i in range(3):
+                        print(f"  {matrix[i*3:i*3+3]}")
+                    print("]")
+                    
                 agent.update()
                 agent.buffer.clear()
                 
