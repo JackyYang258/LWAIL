@@ -58,6 +58,15 @@ def train(expert_buffer, f_net, phi, env, seed, max_ep_len, max_training_timeste
                 s2 = torch.squeeze(torch.stack(agent.buffer.states, dim=0)).detach().to(agent.device)
                 s2_prime = torch.squeeze(torch.stack(agent.buffer.states, dim=0)).detach().to(agent.device)
                 
+                
+                # print loss_f after ppo update
+                if using_ICVF:
+                    loss_f_after_ppo = (torch.mean(f_net(phi(s1), phi(s1_prime))) - torch.mean(f_net(phi(s2), phi(s2_prime))))
+                else:
+                    loss_f_after_ppo = (torch.mean(f_net(s1, s1_prime)) - torch.mean(f_net(s2, s2_prime)))
+                if f_loss_record != []:
+                    print(f'f_loss_difference after update ppo: {loss_f_after_ppo.item() - f_loss_record[-1]}')
+
                 previous_loss_f = float('inf')
                 converged = False
                 for f_step in range(1, f_epoch + 1):
@@ -66,7 +75,7 @@ def train(expert_buffer, f_net, phi, env, seed, max_ep_len, max_training_timeste
                     if using_ICVF:
                         loss_f = (torch.mean(f_net(phi(s1), phi(s1_prime))) - torch.mean(f_net(phi(s2), phi(s2_prime))))
                     else:
-                        loss_f = (torch.mean(f_net(s1, s1_prime) )- torch.mean(f_net(s2, s2_prime)))
+                        loss_f = (torch.mean(f_net(s1, s1_prime)) - torch.mean(f_net(s2, s2_prime)))
                     
                     if converged and abs(previous_loss_f - loss_f) < 1e-3:
                         print(f'Converged at step {f_step}')
@@ -90,10 +99,9 @@ def train(expert_buffer, f_net, phi, env, seed, max_ep_len, max_training_timeste
                     
                 # evluate the f-loss
                 if using_ICVF:
-                    loss_f = (torch.mean(f_net(phi(s2), phi(s2_prime))) - 
-                            torch.mean(f_net(phi(s1), phi(s1_prime))))
+                    loss_f = (torch.mean(f_net(phi(s1), phi(s1_prime))) - torch.mean(f_net(phi(s2), phi(s2_prime))))
                 else:
-                    loss_f = (torch.mean(f_net(s2, s2_prime)) - torch.mean(f_net(s1, s1_prime)))
+                    loss_f = (torch.mean(f_net(s1, s1_prime)) - torch.mean(f_net(s2, s2_prime)))
                 print(f'f_loss: {loss_f.item()}')
                 f_loss_record.append(loss_f.item())
                 time_step_f.append(time_step)
@@ -102,12 +110,12 @@ def train(expert_buffer, f_net, phi, env, seed, max_ep_len, max_training_timeste
                 tensor_states = torch.stack(agent.buffer.states).to(agent.device).float()
                 tensor_next_states = torch.stack(agent.buffer.next_states).to(agent.device).float()
                 
-                if time_step > 5000:
+                if time_step > 150000:
                     print("before",agent.buffer.rewards[500:510])
                 agent.buffer.rewards = (-f_net(tensor_states, tensor_next_states)).view(-1).tolist()
-                if time_step > 5000:
+                if time_step > 150000:
                     print("after",agent.buffer.rewards[500:510])
-                if time_step > 180000:
+                if time_step > 250000:
                     # 定义初始状态
                     initial_state = torch.tensor([0.5, 0.5, 0.0, 0.0])  # 位置 (0.5, 0.5) 速度 (0, 0)
 
@@ -162,6 +170,7 @@ def train(expert_buffer, f_net, phi, env, seed, max_ep_len, max_training_timeste
                 print_running_episodes = 0
                 
             if done:
+                print(f"Episode {i_episode} finished after {step} timesteps")
                 break
 
         print_running_reward += current_ep_reward
@@ -204,33 +213,38 @@ def train(expert_buffer, f_net, phi, env, seed, max_ep_len, max_training_timeste
                 print(f"State: {state}, Reward: {distance}")
     # evaluate_policy(agent, env.spec.id)
 
-    
-    # evaluation
+    from datetime import datetime
+
+    # 获取当前时间并格式化为字符串
+    current_time = datetime.now().strftime("%Y%m%d_%H%M%S")
+
+    # 绘制并保存平均分数图像
     plt.figure(figsize=(12, 6))
     plt.plot(timesteps, avg_score, label='Average Score')
     plt.xlabel('Timesteps')
     plt.ylabel('Average Score')
     plt.legend()
     plt.title('Average Score vs Timesteps')
-    plt.savefig('./log/average_score_vs_timesteps.png')
+    plt.savefig(f'./log/average_score_vs_timesteps_{current_time}.png')
     plt.show()
-    
-    # Plotting the normalized average score
+
+    # 绘制并保存标准化平均分数图像
     plt.figure(figsize=(12, 6))
     plt.plot(timesteps, normalized_scores, label='Normalized Average Score')
     plt.xlabel('Timesteps')
     plt.ylabel('Normalized Average Score')
     plt.legend()
     plt.title('Normalized Average Score vs Timesteps')
-    plt.savefig('./log/normalized_average_score_vs_timesteps.png')
+    plt.savefig(f'./log/normalized_average_score_vs_timesteps_{current_time}.png')
     plt.show()
-    
+
+    # 绘制并保存f-loss图像
     plt.figure(figsize=(12, 6))
     plt.plot(time_step_f, f_loss_record, label='f-loss')
     plt.xlabel('Timesteps')
     plt.ylabel('f-loss')
     plt.legend()
-    plt.title('f-loss vs timesteps')
-    plt.savefig('./log/f-loss.png')
+    plt.title('f-loss vs Timesteps')
+    plt.savefig(f'./log/f_loss_{current_time}.png')
     plt.show()
 

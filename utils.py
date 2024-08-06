@@ -26,3 +26,8 @@ def get_normalized_score(env_name, score):
     ref_min_score = d4rl.infos.REF_MIN_SCORE[env_name]
     ref_max_score = d4rl.infos.REF_MAX_SCORE[env_name]
     return (score - ref_min_score) / (ref_max_score - ref_min_score)
+
+def print_args(args):
+    print("Arguments:")
+    for arg in vars(args):
+        print(f"{arg}: {getattr(args, arg)}")
