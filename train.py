@@ -53,8 +53,8 @@ def train(expert_buffer, f_net, phi, env, seed, max_ep_len, max_training_timeste
             # update if its time
             if time_step % update_timestep == 0:
                 
-                s1 = torch.tensor(expert_buffer['observations']).to(agent.device)
-                s1_prime = torch.tensor(expert_buffer['next_observations']).to(agent.device)
+                s1 = torch.tensor(expert_buffer['observations']).float().to(agent.device)
+                s1_prime = torch.tensor(expert_buffer['next_observations']).float().to(agent.device)
                 s2 = torch.squeeze(torch.stack(agent.buffer.states, dim=0)).detach().to(agent.device)
                 s2_prime = torch.squeeze(torch.stack(agent.buffer.states, dim=0)).detach().to(agent.device)
                 

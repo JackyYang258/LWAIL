@@ -10,29 +10,35 @@ def make_env(env_name: str):
     return env
 
 def get_dataset(env: gym.Env,
-                 clip_to_eps: bool = True,
-                 eps: float = 1e-5):
+                using_d4rl: bool,
+                dataset_path: str,
+                clip_to_eps: bool = True,
+                eps: float = 1e-5,):
+    if using_d4rl:
         dataset = d4rl.qlearning_dataset(env)
+    else:
+        npzfile = np.load(dataset_path)
+        dataset = {key: npzfile[key] for key in npzfile}
 
-        if clip_to_eps:
-            lim = 1 - eps
-            dataset['actions'] = np.clip(dataset['actions'], -lim, lim)
+    if clip_to_eps:
+        lim = 1 - eps
+        dataset['actions'] = np.clip(dataset['actions'], -lim, lim)
 
-        dones_float = np.zeros_like(dataset['rewards'])
+    dones_float = np.zeros_like(dataset['rewards'])
 
-        for i in range(len(dones_float) - 1):
-            if np.linalg.norm(dataset['observations'][i + 1] -
-                              dataset['next_observations'][i]
-                              ) > 1e-6 or dataset['terminals'][i] == 1.0:
-                dones_float[i] = 1
-            else:
-                dones_float[i] = 0
+    for i in range(len(dones_float) - 1):
+        if np.linalg.norm(dataset['observations'][i + 1] -
+                            dataset['next_observations'][i]
+                            ) > 1e-6 or dataset['terminals'][i] == 1.0:
+            dones_float[i] = 1
+        else:
+            dones_float[i] = 0
 
-        dones_float[-1] = 1
+    dones_float[-1] = 1
 
-        dataset['dones_float'] = dones_float
-        
-        return dataset
+    dataset['dones_float'] = dones_float
+    
+    return dataset
 
 class EpisodeMonitor(gym.ActionWrapper):
     """A class that computes episode returns and lengths."""

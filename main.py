@@ -19,8 +19,8 @@ def main(args):
     action_dim = env.action_space.shape[0]
     
     env = make_env(args.env_name)
-    expert_dataset = get_dataset(env)
-    
+    expert_dataset = get_dataset(env, using_d4rl=False, dataset_path='/scratch/bdaw/kaiyan289/intentDICE/dataset/maze2d_expert_dataset.npz')
+
     set_seed_everywhere(args.seed)
     #print informations about the environment
     print('state_dim:', state_dim)
