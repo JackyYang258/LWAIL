@@ -170,7 +170,6 @@ def train(expert_buffer, f_net, phi, env, seed, max_ep_len, max_training_timeste
                 print_running_episodes = 0
                 
             if done:
-                print(f"Episode {i_episode} finished after {step} timesteps")
                 break
 
         print_running_reward += current_ep_reward
