@@ -12,6 +12,15 @@ import gym
 
 using_ICVF = False
 
+def get_expert_rewards(f_net, states, next_states, expert_states, expert_next_states):
+    coeff = 0.2
+    with torch.no_grad():
+        expert_rewards = f_net(states, next_states).view(-1)
+        expert_rewards = -(expert_rewards - f_net(expert_states, expert_next_states).mean()) * coeff
+        expert_rewards = expert_rewards.tolist()
+    return expert_rewards
+    
+
 def train(expert_buffer, f_net, phi, env, seed, max_ep_len, max_training_timesteps, update_timestep, f_epoch, lr_f, action_std_decay_frequency, action_std_decay_rate, min_action_std, state_dim, action_dim, lr_actor, lr_critic, gamma, ppo_epochs, eps_clip, action_std_init=0.6):
     # def __init__(self, state_dim, action_dim, lr_actor, lr_critic, gamma, K_epochs, eps_clip, action_std_init=0.6):
     time()
@@ -53,17 +62,17 @@ def train(expert_buffer, f_net, phi, env, seed, max_ep_len, max_training_timeste
             # update if its time
             if time_step % update_timestep == 0:
                 
-                s1 = torch.tensor(expert_buffer['observations']).float().to(agent.device)
-                s1_prime = torch.tensor(expert_buffer['next_observations']).float().to(agent.device)
-                s2 = torch.squeeze(torch.stack(agent.buffer.states, dim=0)).detach().to(agent.device)
-                s2_prime = torch.squeeze(torch.stack(agent.buffer.states, dim=0)).detach().to(agent.device)
+                expert_state = torch.tensor(expert_buffer['observations']).float().to(agent.device)
+                expert_next_state = torch.tensor(expert_buffer['next_observations']).float().to(agent.device)
+                sample_state = torch.squeeze(torch.stack(agent.buffer.states, dim=0)).detach().to(agent.device)
+                sample_next_state = torch.squeeze(torch.stack(agent.buffer.states, dim=0)).detach().to(agent.device)
                 
                 
                 # print loss_f after ppo update
                 if using_ICVF:
-                    loss_f_after_ppo = (torch.mean(f_net(phi(s1), phi(s1_prime))) - torch.mean(f_net(phi(s2), phi(s2_prime))))
+                    loss_f_after_ppo = (torch.mean(f_net(phi(expert_state), phi(expert_next_state))) - torch.mean(f_net(phi(sample_state), phi(sample_next_state))))
                 else:
-                    loss_f_after_ppo = (torch.mean(f_net(s1, s1_prime)) - torch.mean(f_net(s2, s2_prime)))
+                    loss_f_after_ppo = (torch.mean(f_net(expert_state, expert_next_state)) - torch.mean(f_net(sample_state, sample_next_state)))
                 if f_loss_record != []:
                     print(f'f_loss_difference after update ppo: {loss_f_after_ppo.item() - f_loss_record[-1]}')
 
@@ -73,9 +82,9 @@ def train(expert_buffer, f_net, phi, env, seed, max_ep_len, max_training_timeste
                     # Calculate the loss
                     
                     if using_ICVF:
-                        loss_f = (torch.mean(f_net(phi(s1), phi(s1_prime))) - torch.mean(f_net(phi(s2), phi(s2_prime))))
+                        loss_f = (torch.mean(f_net(phi(expert_state), phi(expert_next_state))) - torch.mean(f_net(phi(sample_state), phi(sample_next_state))))
                     else:
-                        loss_f = (torch.mean(f_net(s1, s1_prime)) - torch.mean(f_net(s2, s2_prime)))
+                        loss_f = (torch.mean(f_net(expert_state, expert_next_state)) - torch.mean(f_net(sample_state, sample_next_state)))
                     
                     if converged and abs(previous_loss_f - loss_f) < 1e-3:
                         print(f'Converged at step {f_step}')
@@ -99,25 +108,23 @@ def train(expert_buffer, f_net, phi, env, seed, max_ep_len, max_training_timeste
                     
                 # evluate the f-loss
                 if using_ICVF:
-                    loss_f = (torch.mean(f_net(phi(s1), phi(s1_prime))) - torch.mean(f_net(phi(s2), phi(s2_prime))))
+                    loss_f = (torch.mean(f_net(phi(expert_state), phi(expert_next_state))) - torch.mean(f_net(phi(sample_state), phi(sample_next_state))))
                 else:
-                    loss_f = (torch.mean(f_net(s1, s1_prime)) - torch.mean(f_net(s2, s2_prime)))
+                    loss_f = (torch.mean(f_net(expert_state, expert_next_state)) - torch.mean(f_net(sample_state, sample_next_state)))
                 print(f'f_loss: {loss_f.item()}')
                 f_loss_record.append(loss_f.item())
                 time_step_f.append(time_step)
-                                
-                # agent.buffer.rewards = f_net(s,s')
-                tensor_states = torch.stack(agent.buffer.states).to(agent.device).float()
-                tensor_next_states = torch.stack(agent.buffer.next_states).to(agent.device).float()
                 
                 if time_step > 150000:
                     print("before",agent.buffer.rewards[500:510])
-                agent.buffer.rewards = (-f_net(tensor_states, tensor_next_states)).view(-1).tolist()
+
+                agent.buffer.rewards = get_expert_rewards(f_net, sample_state, sample_next_state, expert_state, expert_next_state)
+                
                 if time_step > 150000:
                     print("after",agent.buffer.rewards[500:510])
                 if time_step > 250000:
                     # 定义初始状态
-                    initial_state = torch.tensor([0.5, 0.5, 0.0, 0.0])  # 位置 (0.5, 0.5) 速度 (0, 0)
+                    initial_state = torch.tensor([0.5, 0.5, 0.0, 0.0]).to(agent.device) # 位置 (0.5, 0.5) 速度 (0, 0)
 
                     # 定义微小的扰动，包括零扰动
                     perturbations = torch.tensor([
@@ -130,13 +137,13 @@ def train(expert_buffer, f_net, phi, env, seed, max_ep_len, max_training_timeste
                         [0.01, -0.01, 0.0, 0.0],  # 右下
                         [-0.01, 0.01, 0.0, 0.0],  # 左上
                         [0.0, 0.0, 0.0, 0.0]      # 中心
-                    ])
+                    ]).to(agent.device)
 
                     # 获取 f_net 的结果并存储
                     results = []
                     for perturbation in perturbations:
                         next_state = initial_state + perturbation
-                        output_state = -f_net(initial_state.unsqueeze(0).to(agent.device), next_state.unsqueeze(0).to(agent.device)).item()
+                        output_state = get_expert_rewards(f_net, initial_state, next_state, expert_state, expert_next_state)[0]
                         results.append(output_state)
 
                     # 打印结果为 3x3 矩阵格式

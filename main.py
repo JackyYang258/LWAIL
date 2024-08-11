@@ -62,16 +62,16 @@ if __name__ == '__main__':
     parser.add_argument('--using_icvf', default=False, help='Flag to indicate whether to use ICVF.')
     
     # Important Training arguments
-    parser.add_argument('--max_training_timesteps', type=int, default=300000, help='Maximum number of timesteps for training.')
-    parser.add_argument('--f_epoch', type=int, default=50, help='Number of epochs for training the function network.')
+    parser.add_argument('--max_training_timesteps', type=int, default=1000000, help='Maximum number of timesteps for training.')
+    parser.add_argument('--f_epoch', type=int, default=100, help='Number of epochs for training the function network.')
     parser.add_argument('--ppo_epochs', type=int, default=20, help='Number of epochs for PPO training.')
     parser.add_argument('--lr_f', type=float, default=1e-3, help='Learning rate for the function network.')
     parser.add_argument('--lr_actor', type=float, default=3e-4, help='Learning rate for the actor network.')
     parser.add_argument('--lr_critic', type=float, default=1e-3, help='Learning rate for the critic network.')
     
-    parser.add_argument('--hidden_dim', type=str, default='256,256', help='Comma-separated list of hidden dimensions for the network.')
-    parser.add_argument('--max_ep_len', type=int, default=2000, help='Maximum length of each episode.')
-    parser.add_argument('--update_timestep', type=int, default=4000, help='Number of timesteps between updates.')
+    parser.add_argument('--hidden_dim', type=str, default='64,64', help='Comma-separated list of hidden dimensions for the network.')
+    parser.add_argument('--max_ep_len', type=int, default=1000, help='Maximum length of each episode.')
+    parser.add_argument('--update_timestep', type=int, default=1000, help='Number of timesteps between updates.')
     parser.add_argument('--gamma', type=float, default=0.99, help='Discount factor for rewards.')
     parser.add_argument('--eps_clip', type=float, default=0.2, help='Clip parameter for PPO.')
     parser.add_argument('--action_std_decay_frequency', type=int, default=int(2e5), help='Frequency of action standard deviation decay.')
