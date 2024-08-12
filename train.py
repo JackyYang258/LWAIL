@@ -21,6 +21,36 @@ def get_expert_rewards(f_net, states, next_states, expert_states, expert_next_st
     return expert_rewards
     
 
+def evaluate_policy(agent, env_name, goal_state=None, num_episodes=3):
+        env = gym.make(env_name)
+        all_states = []
+        all_rewards = []
+
+        for episode in range(num_episodes):
+            state = env.reset()
+            done = False
+            episode_states = []
+            episode_rewards = []
+
+            for step in range(1, 1000 + 1):
+                action = agent.select_action(state)
+                next_state, reward, done, _ = env.step(action)
+                episode_states.append(state)
+                episode_rewards.append(reward)
+                state = next_state
+                if done:
+                    break
+
+            all_states.append(episode_states)
+            all_rewards.append(episode_rewards)
+
+        env.close()
+        print("Visited states and distances to goal in each episode:")
+        for i, (episode_states, episode_rewards) in enumerate(zip(all_states, all_rewards)):
+            print(f"Episode {i+1}:")
+            for state, distance in zip(episode_states, episode_rewards):
+                print(f"State: {state}, Reward: {distance}")
+
 def train(expert_buffer, f_net, phi, env, seed, max_ep_len, max_training_timesteps, update_timestep, f_epoch, lr_f, action_std_decay_frequency, action_std_decay_rate, min_action_std, state_dim, action_dim, lr_actor, lr_critic, gamma, ppo_epochs, eps_clip, action_std_init=0.6):
     # def __init__(self, state_dim, action_dim, lr_actor, lr_critic, gamma, K_epochs, eps_clip, action_std_init=0.6):
     time()
@@ -43,6 +73,7 @@ def train(expert_buffer, f_net, phi, env, seed, max_ep_len, max_training_timeste
     print_running_reward = 0
     print_running_episodes = 0
     
+    evaluate_policy(agent, env.spec.id)
     while time_step <= max_training_timesteps:
         
         state = env.reset()
@@ -106,22 +137,24 @@ def train(expert_buffer, f_net, phi, env, seed, max_ep_len, max_training_timeste
                     
                     f_net = network_weight_matrices(f_net, 1)
                     
+                
                 # evluate the f-loss
                 if using_ICVF:
                     loss_f = (torch.mean(f_net(phi(expert_state), phi(expert_next_state))) - torch.mean(f_net(phi(sample_state), phi(sample_next_state))))
                 else:
                     loss_f = (torch.mean(f_net(expert_state, expert_next_state)) - torch.mean(f_net(sample_state, sample_next_state)))
                 print(f'f_loss: {loss_f.item()}')
+                print(f'f_loss_difference after update f: {loss_f.item() - loss_f_after_ppo.item()}')
                 f_loss_record.append(loss_f.item())
                 time_step_f.append(time_step)
                 
                 if time_step > 150000:
-                    print("before",agent.buffer.rewards[500:510])
+                    print("before",agent.buffer.rewards[500:503])
 
                 agent.buffer.rewards = get_expert_rewards(f_net, sample_state, sample_next_state, expert_state, expert_next_state)
                 
                 if time_step > 150000:
-                    print("after",agent.buffer.rewards[500:510])
+                    print("after",agent.buffer.rewards[500:503])
                 if time_step > 250000:
                     # 定义初始状态
                     initial_state = torch.tensor([0.5, 0.5, 0.0, 0.0]).to(agent.device) # 位置 (0.5, 0.5) 速度 (0, 0)
@@ -153,6 +186,7 @@ def train(expert_buffer, f_net, phi, env, seed, max_ep_len, max_training_timeste
                         results[5], results[3], results[6]
                     ]
 
+                    print("rewards")
                     print("[")
                     for i in range(3):
                         print(f"  {matrix[i*3:i*3+3]}")

@@ -1,37 +1,37 @@
 import torch
 import torch.nn as nn
 
-# class FullyConnectedNet(nn.Module):
-#     def __init__(self, input_dim: int, hidden_dims, activation=nn.ReLU, activate_final=False):
-#         super(FullyConnectedNet, self).__init__()
-#         layers = []
-#         current_dim = input_dim  # Since we will concatenate two inputs
-#         for dim in hidden_dims:
-#             layers.append(nn.Linear(current_dim, dim))
-#             layers.append(activation())
-#             current_dim = dim
-#         layers.append(nn.Linear(current_dim, 1))  # Output dimension is 1
-#         if activate_final:
-#             layers.append(activation())
-#         self.net = nn.Sequential(*layers)
-
-#     def forward(self, x1, x2):
-#         # Concatenate the inputs along the feature dimension
-#         x = torch.cat((x1, x2), dim=-1)
-#         return self.net(x)
-
 class FullyConnectedNet(nn.Module):
     def __init__(self, input_dim: int, hidden_dims, activation=nn.ReLU, activate_final=False):
         super(FullyConnectedNet, self).__init__()
         layers = []
-        current_dim = input_dim  
-        layers.append(nn.Linear(current_dim, 1))
+        current_dim = input_dim  # Since we will concatenate two inputs
+        for dim in hidden_dims:
+            layers.append(nn.Linear(current_dim, dim))
+            layers.append(activation())
+            current_dim = dim
+        layers.append(nn.Linear(current_dim, 1))  # Output dimension is 1
+        if activate_final:
+            layers.append(activation())
         self.net = nn.Sequential(*layers)
 
     def forward(self, x1, x2):
         # Concatenate the inputs along the feature dimension
         x = torch.cat((x1, x2), dim=-1)
         return self.net(x)
+
+# class FullyConnectedNet(nn.Module):
+#     def __init__(self, input_dim: int, hidden_dims, activation=nn.ReLU, activate_final=False):
+#         super(FullyConnectedNet, self).__init__()
+#         layers = []
+#         current_dim = input_dim  
+#         layers.append(nn.Linear(current_dim, 1))
+#         self.net = nn.Sequential(*layers)
+
+#     def forward(self, x1, x2):
+#         # Concatenate the inputs along the feature dimension
+#         x = torch.cat((x1, x2), dim=-1)
+#         return self.net(x)
 
 class PhiNet(nn.Module):
     def __init__(self, hidden_dims, activation=nn.GELU, activate_final=False):
