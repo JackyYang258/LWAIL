@@ -3,6 +3,7 @@ from tqdm import tqdm
 
 from network import network_weight_matrices, FullyConnectedNet, PhiNet
 from ppo import PPO
+from td3 import TD3
 from utils import time
 import icecream as ic
 import d4rl
@@ -15,13 +16,17 @@ class Agent:
     def __init__(self, state_dim, action_dim, env, expert_buffer, args):
         # Basic information
         self.args = args
-        self.agent = PPO(state_dim, action_dim, self.args.lr_actor, self.args.lr_critic, self.args.gamma, self.args.ppo_epochs, self.args.eps_clip, self.args.action_std_init)
+        self.agent_kind = 'td3'
+        if self.agent_kind == 'ppo':
+            self.agent = PPO(state_dim, action_dim, self.args.lr_actor, self.args.lr_critic, self.args.gamma, self.args.ppo_epochs, self.args.eps_clip, self.args.action_std_init)
+        if self.agent_kind == 'td3':
+            self.agent = TD3(state_dim, action_dim, self.args.lr_actor, self.args.lr_critic, self.args)
+        self.device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
         self.env = env
-        self.expert_states = torch.tensor(expert_buffer['observations']).float().to(self.agent.device)
-        self.expert_next_states = torch.tensor(expert_buffer['next_observations']).float().to(self.agent.device)
+        self.expert_states = torch.tensor(expert_buffer['observations']).float().to(self.device)
+        self.expert_next_states = torch.tensor(expert_buffer['next_observations']).float().to(self.device)
         self.hidden_dims = list(map(int, args.hidden_dim.split(',')))
         torch.set_default_dtype(torch.float32)
-        self.device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
         
         # Variable for record
         self.time_step = 0
@@ -77,8 +82,8 @@ class Agent:
 
                 # Update if it's time
                 if self.time_step % self.args.update_timestep == 0:
-                    self.sample_states = torch.squeeze(torch.stack(self.agent.buffer.states, dim=0)).detach().to(self.agent.device)
-                    self.sample_next_states = torch.squeeze(torch.stack(self.agent.buffer.states, dim=0)).detach().to(self.agent.device)
+                    self.sample_states = torch.squeeze(torch.stack(self.agent.buffer.states, dim=0)).detach().to(self.device)
+                    self.sample_next_states = torch.squeeze(torch.stack(self.agent.buffer.states, dim=0)).detach().to(self.device)
 
                     self.f_update()
 
@@ -96,7 +101,7 @@ class Agent:
                     self.agent.update()
                     self.agent.buffer.clear()
 
-                if self.time_step % self.args.action_std_decay_frequency == 0:
+                if self.time_step % self.args.action_std_decay_frequency == 0 and self.agent_kind == 'ppo':
                     self.agent.decay_action_std(self.args.action_std_decay_rate, self.args.min_action_std)
 
                 if self.time_step % self.args.eval_freq == 0:
@@ -207,7 +212,7 @@ class Agent:
         
     def print_pertubarion_results_for_test(self):
         # Initial state
-        initial_state = torch.tensor([0.5, 0.5, 0.0, 0.0]).to(self.agent.device)
+        initial_state = torch.tensor([0.5, 0.5, 0.0, 0.0]).to(self.device)
 
         # Small perturbations, including zero perturbation
         perturbations = torch.tensor([
@@ -220,7 +225,7 @@ class Agent:
             [0.01, -0.01, 0.0, 0.0],  # Down-right
             [-0.01, 0.01, 0.0, 0.0],  # Up-left
             [0.0, 0.0, 0.0, 0.0]      # Center
-        ]).to(self.agent.device)
+        ]).to(self.device)
 
         # Get f_net results and store them
         results = []
