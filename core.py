@@ -17,8 +17,8 @@ class Agent:
         self.args = args
         self.agent = PPO(state_dim, action_dim, self.args.lr_actor, self.args.lr_critic, self.args.gamma, self.args.ppo_epochs, self.args.eps_clip, self.args.action_std_init)
         self.env = env
-        self.expert_state = torch.tensor(expert_buffer['observations']).float().to(self.agent.device)
-        expert_next_state = torch.tensor(expert_buffer['next_observations']).float().to(self.agent.device)
+        self.expert_states = torch.tensor(expert_buffer['observations']).float().to(self.agent.device)
+        self.expert_next_states = torch.tensor(expert_buffer['next_observations']).float().to(self.agent.device)
         self.hidden_dims = list(map(int, args.hidden_dim.split(',')))
         torch.set_default_dtype(torch.float32)
         self.device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
@@ -30,8 +30,6 @@ class Agent:
         self.i_episode = 0
         self.sample_states = []
         self.sample_next_states = []
-        self.expert_states = []
-        self.expert_next_states = []
         
         self.timesteps = []
         self.avg_score = []
@@ -50,8 +48,8 @@ class Agent:
             self.phi_net = None
             print('Not using ICVF')
         self.f_net = FullyConnectedNet(state_dim * 2, self.hidden_dims).to('cuda:0')
-        f_net = network_weight_matrices(f_net, 1)
-        self.f_optimizer = torch.optim.Adam(args['f_net'].parameters(), lr=args['lr_f'])
+        self.f_net = network_weight_matrices(self.f_net, 1)
+        self.f_optimizer = torch.optim.Adam(self.f_net.parameters(), self.args.lr_f)
         
         os.makedirs('./log', exist_ok=True)
 
@@ -79,8 +77,8 @@ class Agent:
 
                 # Update if it's time
                 if self.time_step % self.args.update_timestep == 0:
-                    self.sample_state = torch.squeeze(torch.stack(self.agent.buffer.states, dim=0)).detach().to(self.agent.device)
-                    self.sample_next_state = torch.squeeze(torch.stack(self.agent.buffer.states, dim=0)).detach().to(self.agent.device)
+                    self.sample_states = torch.squeeze(torch.stack(self.agent.buffer.states, dim=0)).detach().to(self.agent.device)
+                    self.sample_next_states = torch.squeeze(torch.stack(self.agent.buffer.states, dim=0)).detach().to(self.agent.device)
 
                     self.f_update()
 
@@ -115,7 +113,7 @@ class Agent:
         # Plotting and saving the results
         self.save_results()
 
-    def evaluate_policy(self, goal_state=None, num_episodes=3):
+    def evaluate_policy(self, goal_state=None, num_episodes=10):
         env = gym.make(self.args.env_name)
         all_states = []
         all_rewards = []
@@ -127,7 +125,7 @@ class Agent:
             episode_rewards = []
 
             for step in range(1, 1000 + 1):
-                action = self.agent.select_action(state)
+                action = self.agent.select_action_eval(state)
                 next_state, reward, done, _ = env.step(action)
                 episode_states.append(state)
                 episode_rewards.append(reward)
@@ -142,8 +140,8 @@ class Agent:
         print("Visited states and distances to goal in each episode:")
         for i, (episode_states, episode_rewards) in enumerate(zip(all_states, all_rewards)):
             print(f"Episode {i+1}:")
-            for state, distance in zip(episode_states, episode_rewards):
-                print(f"State: {state}, Reward: {distance}")
+            print("sum of rewards:", sum(episode_rewards))
+        print("mean rewards of all episodes:", sum(map(sum, all_rewards)) / num_episodes)
 
     def get_pseudo_rewards(self):
         coeff = 0.2
@@ -164,15 +162,18 @@ class Agent:
     def f_update(self):
         previous_loss_f = float('inf')
         converged = False
+        first_loss_f = 0
         
         for f_step in range(1, self.args.f_epoch + 1):
-            if self.args.using_ICVF:
-                loss_f = (torch.mean(self.f_net(self.phi_net(self.expert_state), self.phi_net(self.expert_next_state))) - torch.mean(self.f_net(self.phi_net(self.sample_state), self.phi_net(self.sample_next_state))))
+            if self.args.using_icvf:
+                loss_f = (torch.mean(self.f_net(self.phi_net(self.expert_states), self.phi_net(self.expert_next_states))) - torch.mean(self.f_net(self.phi_net(self.sample_states), self.phi_net(self.sample_next_states))))
             else:
-                loss_f= (torch.mean(self.f_net(self.expert_state, self.expert_next_state)) - torch.mean(self.f_net(self.sample_state, self.sample_next_state)))
+                loss_f = (torch.mean(self.f_net(self.expert_states, self.expert_next_states)) - torch.mean(self.f_net(self.sample_states, self.sample_next_states)))
             
             if f_step == 1 and self.f_loss_record != []:
                 print(f'f_loss_difference after update ppo: {loss_f.item() - self.f_loss_record[-1]}')
+                first_loss_f = loss_f.item()
+                
                 
 
             if converged and abs(previous_loss_f - loss_f) < 1e-3:
@@ -191,15 +192,16 @@ class Agent:
             loss_f.backward()
             self.f_optimizer.step()
 
-            f_net = network_weight_matrices(f_net, 1)
+            self.f_net = network_weight_matrices(self.f_net, 1)
         
-        if self.args.using_ICVF:
-            loss_f_after_ppo = (torch.mean(self.f_net(self.phi_net(self.expert_state), self.phi_net(self.expert_next_state))) - torch.mean(self.f_net(self.phi_net(self.sample_state), self.phi_net(self.sample_next_state))))
-        else:
-            loss_f_after_ppo = (torch.mean(self.f_net(self.expert_state, self.expert_next_state)) - torch.mean(self.f_net(self.sample_state, self.sample_next_state)))
+        with torch.no_grad():
+            if self.args.using_icvf:
+                loss_f = (torch.mean(self.f_net(self.phi_net(self.expert_states), self.phi_net(self.expert_next_states))) - torch.mean(self.f_net(self.phi_net(self.sample_states), self.phi_net(self.sample_next_states))))
+            else:
+                loss_f= (torch.mean(self.f_net(self.expert_states, self.expert_next_states)) - torch.mean(self.f_net(self.sample_states, self.sample_next_states)))
 
         print(f'f_loss: {loss_f.item()}')
-        print(f'f_loss_difference after update f: {loss_f.item() - loss_f_after_ppo.item()}')
+        print(f'f_loss_difference after update f: {loss_f.item() - first_loss_f}')
         self.f_loss_record.append(loss_f.item())
         self.time_step_f.append(self.time_step)
         
@@ -224,7 +226,7 @@ class Agent:
         results = []
         for perturbation in perturbations:
             next_state = initial_state + perturbation
-            output_reward = self.get_pseudo_rewards_fortest(initial_state, next_state)[0]
+            output_reward = self.get_pseudo_rewards_for_test(initial_state, next_state)[0]
             results.append(output_reward)
 
         # Print results as a 3x3 matrix

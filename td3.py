@@ -16,37 +16,25 @@ else:
 print("============================================================================================")
 
 
-################################## DDPG Policy ##################################
-class ReplayBuffer:
-    def __init__(self, max_size, state_dim, action_dim):
-        self.max_size = max_size
-        self.ptr = 0
-        self.size = 0
-        
-        self.state_buffer = np.zeros((max_size, state_dim))
-        self.action_buffer = np.zeros((max_size, action_dim))
-        self.reward_buffer = np.zeros((max_size, 1))
-        self.next_state_buffer = np.zeros((max_size, state_dim))
-        self.done_buffer = np.zeros((max_size, 1))
+################################## td3 Policy ##################################
+class RolloutBuffer:
+    def __init__(self):
+        self.actions = []
+        self.states = []
+        self.logprobs = []
+        self.rewards = []
+        self.state_values = []
+        self.is_terminals = []
+        self.next_states = []
     
-    def store(self, state, action, reward, next_state, done):
-        self.state_buffer[self.ptr] = state
-        self.action_buffer[self.ptr] = action
-        self.reward_buffer[self.ptr] = reward
-        self.next_state_buffer[self.ptr] = next_state
-        self.done_buffer[self.ptr] = done
-
-        self.ptr = (self.ptr + 1) % self.max_size
-        self.size = min(self.size + 1, self.max_size)
-    
-    def sample(self, batch_size):
-        indices = np.random.randint(0, self.size, size=batch_size)
-        return dict(state=self.state_buffer[indices],
-                    action=self.action_buffer[indices],
-                    reward=self.reward_buffer[indices],
-                    next_state=self.next_state_buffer[indices],
-                    done=self.done_buffer[indices])
-
+    def clear(self):
+        del self.actions[:]
+        del self.states[:]
+        del self.logprobs[:]
+        del self.rewards[:]
+        del self.state_values[:]
+        del self.is_terminals[:]
+        del self.next_states[:]
 
 class Actor(nn.Module):
     def __init__(self, state_dim, action_dim, max_action):

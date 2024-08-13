@@ -140,6 +140,13 @@ class PPO:
         self.buffer.state_values.append(state_val)
 
         return action.detach().cpu().numpy().flatten()
+    
+    def select_action_eval(self, state):
+        with torch.no_grad():
+            state = torch.FloatTensor(state).to(device)
+            action, action_logprob, state_val = self.policy_old.act(state)
+
+        return action.detach().cpu().numpy().flatten()
 
     def update(self):
         # Monte Carlo estimate of returns
