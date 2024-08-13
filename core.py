@@ -20,7 +20,7 @@ class Agent:
         if self.agent_kind == 'ppo':
             self.agent = PPO(state_dim, action_dim, self.args.lr_actor, self.args.lr_critic, self.args.gamma, self.args.ppo_epochs, self.args.eps_clip, self.args.action_std_init)
         if self.agent_kind == 'td3':
-            self.agent = TD3(state_dim, action_dim, self.args.lr_actor, self.args.lr_critic, self.args)
+            self.agent = TD3(state_dim, action_dim, self.args.lr_actor, self.args.lr_critic, self.args.ppo_epochs)
         self.device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
         self.env = env
         self.expert_states = torch.tensor(expert_buffer['observations']).float().to(self.device)
@@ -72,6 +72,7 @@ class Agent:
             for step in range(1, self.args.max_ep_len + 1):
                 action = self.agent.select_action(state)
                 next_state, reward, done, _ = self.env.step(action)
+                state = next_state
 
                 self.agent.buffer.next_states.append(torch.tensor(next_state))
                 self.agent.buffer.rewards.append(reward)
@@ -84,15 +85,16 @@ class Agent:
                 if self.time_step % self.args.update_timestep == 0:
                     self.sample_states = torch.squeeze(torch.stack(self.agent.buffer.states, dim=0)).detach().to(self.device)
                     self.sample_next_states = torch.squeeze(torch.stack(self.agent.buffer.states, dim=0)).detach().to(self.device)
+                    print("shape", self.sample_states.shape, self.sample_next_states.shape)
+                    if self.time_step < 400000:
+                        self.f_update()
 
-                    self.f_update()
-
-                    if self.time_step > 150000:
+                    if self.time_step > 0:
                         print("before", self.agent.buffer.rewards[500:503])
 
                     self.agent.buffer.rewards = self.get_pseudo_rewards()
 
-                    if self.time_step > 150000:
+                    if self.time_step > 0:
                         print("after", self.agent.buffer.rewards[500:503])
 
                     if self.time_step > 250000:

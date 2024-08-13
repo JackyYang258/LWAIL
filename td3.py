@@ -82,14 +82,15 @@ class TD3:
         action_dim,
         lr_actor,
         lr_critic,
-        max_action=1,
-        discount=0.99,
+        K_epochs,
+        max_action = 1,
+        discount = 0.99,
         tau=0.005,
         policy_noise=0.2,
         noise_clip=0.5,
         policy_freq=2
     ):
-        self.actor = Actor(state_dim, action_dim, max_action).to(device)
+        self.actor = Actor(state_dim, action_dim, 1).to(device)
         self.actor_target = copy.deepcopy(self.actor)
         self.actor_optimizer = torch.optim.Adam(self.actor.parameters(), lr=lr_actor)
 
@@ -103,6 +104,7 @@ class TD3:
         self.policy_noise = policy_noise
         self.noise_clip = noise_clip
         self.policy_freq = policy_freq
+        self.K_epochs = K_epochs
 
         self.total_it = 0
         self.buffer = RolloutBuffer()
@@ -127,11 +129,12 @@ class TD3:
 
     def update(self):
         # Sample replay buffer 
-        state = torch.squeeze(torch.stack(self.buffer.states, dim=0)).detach().to(device)
-        action = torch.squeeze(torch.stack(self.buffer.actions, dim=0)).detach().to(device)
-        next_state = torch.squeeze(torch.stack(self.buffer.next_states, dim=0)).detach().to(device)
-        reward = torch.squeeze(torch.stack(self.buffer.rewards, dim=0)).detach().to(device)
-        not_done = -torch.squeeze(torch.stack(self.buffer.not_done, dim=0)).detach().to(device)
+        
+        state = torch.squeeze(torch.stack(self.buffer.states, dim=0)).detach().to(device).float()
+        action = torch.squeeze(torch.stack(self.buffer.actions, dim=0)).detach().to(device).float()
+        next_state = torch.squeeze(torch.stack(self.buffer.next_states, dim=0)).detach().to(device).float()
+        not_done = ~torch.squeeze(torch.stack([torch.tensor(t) for t in self.buffer.is_terminals], dim=0)).detach().to(device)
+        reward = torch.tensor(self.buffer.rewards, dtype=torch.float32).to(device)
         for _ in range(self.K_epochs):
             self.train(state, action, next_state, reward, not_done)
         
@@ -151,12 +154,16 @@ class TD3:
             # Compute the target Q value
             target_Q1, target_Q2 = self.critic_target(next_state, next_action)
             target_Q = torch.min(target_Q1, target_Q2)
+            reward = reward.unsqueeze(1)
+            not_done = not_done.unsqueeze(1)
             target_Q = reward + not_done * self.discount * target_Q
+            print("targetQ",target_Q.shape)
 
         # Get current Q estimates
         current_Q1, current_Q2 = self.critic(state, action)
 
         # Compute critic loss
+        print(current_Q1.shape, target_Q.shape)
         critic_loss = F.mse_loss(current_Q1, target_Q) + F.mse_loss(current_Q2, target_Q)
 
         # Optimize the critic
