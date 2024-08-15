@@ -157,13 +157,11 @@ class TD3:
             reward = reward.unsqueeze(1)
             not_done = not_done.unsqueeze(1)
             target_Q = reward + not_done * self.discount * target_Q
-            print("targetQ",target_Q.shape)
 
         # Get current Q estimates
         current_Q1, current_Q2 = self.critic(state, action)
 
         # Compute critic loss
-        print(current_Q1.shape, target_Q.shape)
         critic_loss = F.mse_loss(current_Q1, target_Q) + F.mse_loss(current_Q2, target_Q)
 
         # Optimize the critic

@@ -16,6 +16,7 @@ class Agent:
     def __init__(self, state_dim, action_dim, env, expert_buffer, args):
         # Basic information
         self.args = args
+        self.only_state = True
         self.agent_kind = 'td3'
         if self.agent_kind == 'ppo':
             self.agent = PPO(state_dim, action_dim, self.args.lr_actor, self.args.lr_critic, self.args.gamma, self.args.ppo_epochs, self.args.eps_clip, self.args.action_std_init)
@@ -35,12 +36,14 @@ class Agent:
         self.i_episode = 0
         self.sample_states = []
         self.sample_next_states = []
+        self.previous_f_value = 0
         
         self.timesteps = []
         self.avg_score = []
         self.normalized_scores = []
         self.f_loss_record = []
         self.time_step_f = []
+        self.f_value_record = []
         
         # Network initialization
         if self.args.using_icvf:
@@ -52,9 +55,12 @@ class Agent:
         else:
             self.phi_net = None
             print('Not using ICVF')
-        self.f_net = FullyConnectedNet(state_dim * 2, self.hidden_dims).to('cuda:0')
+        if self.only_state == True:
+            self.f_net = FullyConnectedNet(state_dim, self.hidden_dims).to('cuda:0')
+        else:
+            self.f_net = FullyConnectedNet(state_dim * 2, self.hidden_dims).to('cuda:0')
         self.f_net = network_weight_matrices(self.f_net, 1)
-        self.f_optimizer = torch.optim.Adam(self.f_net.parameters(), self.args.lr_f)
+        self.f_optimizer = torch.optim.Adam(self.f_net.parameters(), self.args.lr_f, weight_decay=1e-3)
         
         os.makedirs('./log', exist_ok=True)
 
@@ -85,19 +91,20 @@ class Agent:
                 if self.time_step % self.args.update_timestep == 0:
                     self.sample_states = torch.squeeze(torch.stack(self.agent.buffer.states, dim=0)).detach().to(self.device)
                     self.sample_next_states = torch.squeeze(torch.stack(self.agent.buffer.states, dim=0)).detach().to(self.device)
-                    print("shape", self.sample_states.shape, self.sample_next_states.shape)
-                    if self.time_step < 400000:
+                    
+                    if self.time_step < 20000000:
                         self.f_update()
 
-                    if self.time_step > 0:
+                    if self.time_step > self.args.max_training_timesteps-20000:
                         print("before", self.agent.buffer.rewards[500:503])
 
                     self.agent.buffer.rewards = self.get_pseudo_rewards()
+                    
 
-                    if self.time_step > 0:
+                    if self.time_step > self.args.max_training_timesteps-20000:
                         print("after", self.agent.buffer.rewards[500:503])
 
-                    if self.time_step > 250000:
+                    if self.time_step > self.args.max_training_timesteps-20000:
                         self.print_pertubarion_results_for_test()
 
                     self.agent.update()
@@ -153,17 +160,27 @@ class Agent:
     def get_pseudo_rewards(self):
         coeff = 0.2
         with torch.no_grad():
-            expert_rewards = self.f_net(self.sample_states, self.sample_next_states).view(-1)
-            expert_rewards = -(expert_rewards - self.f_net(self.expert_states, self.expert_next_states).mean()) * coeff
-            expert_rewards = expert_rewards.tolist()
+            if self.only_state:
+                expert_rewards = self.f_net(self.sample_next_states).view(-1)
+                expert_rewards = -(expert_rewards - self.f_net(self.expert_states).mean()) * coeff
+                expert_rewards = expert_rewards.tolist()
+            else:
+                expert_rewards = self.f_net(self.sample_states, self.sample_next_states).view(-1)
+                expert_rewards = -(expert_rewards - self.f_net(self.expert_states, self.expert_next_states).mean()) * coeff
+                expert_rewards = expert_rewards.tolist()
         return expert_rewards
     
     def get_pseudo_rewards_for_test(self, state, next_state):
         coeff = 0.2
         with torch.no_grad():
-            expert_rewards = self.f_net(state, next_state).view(-1)
-            expert_rewards = -(expert_rewards - self.f_net(self.expert_states, self.expert_next_states).mean()) * coeff
-            expert_rewards = expert_rewards.tolist()
+            if self.only_state:
+                expert_rewards = self.f_net(next_state).view(-1)
+                expert_rewards = -(expert_rewards - self.f_net(self.expert_states).mean()) * coeff
+                expert_rewards = expert_rewards.tolist()
+            else:
+                expert_rewards = self.f_net(state, next_state).view(-1)
+                expert_rewards = -(expert_rewards - self.f_net(self.expert_states, self.expert_next_states).mean()) * coeff
+                expert_rewards = expert_rewards.tolist()
         return expert_rewards
 
     def f_update(self):
@@ -171,44 +188,72 @@ class Agent:
         converged = False
         first_loss_f = 0
         
+
         for f_step in range(1, self.args.f_epoch + 1):
             if self.args.using_icvf:
-                loss_f = (torch.mean(self.f_net(self.phi_net(self.expert_states), self.phi_net(self.expert_next_states))) - torch.mean(self.f_net(self.phi_net(self.sample_states), self.phi_net(self.sample_next_states))))
+                loss_f = (torch.mean(self.f_net(self.phi_net(self.expert_states), self.phi_net(self.expert_next_states))) - 
+                        torch.mean(self.f_net(self.phi_net(self.sample_states), self.phi_net(self.sample_next_states))))
             else:
-                loss_f = (torch.mean(self.f_net(self.expert_states, self.expert_next_states)) - torch.mean(self.f_net(self.sample_states, self.sample_next_states)))
-            
-            if f_step == 1 and self.f_loss_record != []:
-                print(f'f_loss_difference after update ppo: {loss_f.item() - self.f_loss_record[-1]}')
-                first_loss_f = loss_f.item()
-                
-                
+                if self.only_state:
+                    loss_f = (torch.mean(self.f_net(self.expert_states)) - 
+                            torch.mean(self.f_net(self.sample_states)))
+                else:
+                    loss_f = (torch.mean(self.f_net(self.expert_states, self.expert_next_states)) - 
+                        torch.mean(self.f_net(self.sample_states, self.sample_next_states)))
 
-            if converged and abs(previous_loss_f - loss_f) < 1e-3:
+            # Step 2: Compute the current mean output of f_net using expert states
+            if self.only_state:
+                current_mean_f_net = torch.mean(self.f_net(self.expert_states))
+            else:
+                current_mean_f_net = torch.mean(self.f_net(self.expert_states, self.expert_next_states))
+            
+            # Step 3: Calculate the penalty term as the difference between current and previous mean outputs
+            penalty = torch.abs(current_mean_f_net - self.previous_f_value)
+            coefficient = 0
+            # Step 4: Add this penalty to the original loss
+            total_loss_f = loss_f + coefficient * penalty
+
+            if f_step == 1 and self.f_loss_record != []:
+                print(f'f_loss_difference after update ppo: {total_loss_f.item() - self.f_loss_record[-1]}')
+                first_loss_f = total_loss_f.item()
+
+            if converged and abs(previous_loss_f - total_loss_f) < 1e-3:
                 print(f'Converged at step {f_step}')
                 break
 
-            if abs(previous_loss_f - loss_f) < 1e-5:
+            if abs(previous_loss_f - total_loss_f) < 1e-5:
                 converged = True
                 print("1")
                 break
 
-            previous_loss_f = loss_f.item()
-
-            # Optimize f_net by minimizing loss_f
+            # Optimize f_net by minimizing total_loss_f
             self.f_net.zero_grad()
-            loss_f.backward()
+            total_loss_f.backward()
             self.f_optimizer.step()
 
+            # Update the stored mean output after the update
+            self.previous_f_value = current_mean_f_net.detach()
+
+            # Apply any additional weight adjustments (e.g., network_weight_matrices)
             self.f_net = network_weight_matrices(self.f_net, 1)
+
         
         with torch.no_grad():
             if self.args.using_icvf:
                 loss_f = (torch.mean(self.f_net(self.phi_net(self.expert_states), self.phi_net(self.expert_next_states))) - torch.mean(self.f_net(self.phi_net(self.sample_states), self.phi_net(self.sample_next_states))))
             else:
-                loss_f= (torch.mean(self.f_net(self.expert_states, self.expert_next_states)) - torch.mean(self.f_net(self.sample_states, self.sample_next_states)))
+                if self.only_state:
+                    loss_f = (torch.mean(self.f_net(self.expert_states)) - torch.mean(self.f_net(self.sample_states)))
+                else:
+                    loss_f = (torch.mean(self.f_net(self.expert_states, self.expert_next_states)) 
+                          - torch.mean(self.f_net(self.sample_states, self.sample_next_states)))
 
-        print(f'f_loss: {loss_f.item()}')
         print(f'f_loss_difference after update f: {loss_f.item() - first_loss_f}')
+        if self.only_state:
+            f_value = torch.mean(self.f_net(self.expert_states)).item()
+        else:
+            f_value = torch.mean(self.f_net(self.expert_states, self.expert_next_states)).item()
+        self.f_value_record.append(f_value)
         self.f_loss_record.append(loss_f.item())
         self.time_step_f.append(self.time_step)
         
@@ -252,8 +297,6 @@ class Agent:
     def evaluation(self):
         avg_reward = round(self.sum_episodes_reward / self.sum_episodes_num, 2)
         normalized_score = d4rl.get_normalized_score(self.args.env_name, avg_reward)
-        print(f"Episode : {self.i_episode} \t\t Timestep : {self.time_step} \t\t Average Score : {avg_reward}")
-        print(f"Episode : {self.i_episode} \t\t Timestep : {self.time_step} \t\t Normalized Average Score : {normalized_score}")
 
         self.timesteps.append(self.time_step)
         self.avg_score.append(avg_reward)
@@ -275,15 +318,15 @@ class Agent:
         plt.savefig(f'./log/average_score_vs_timesteps_{current_time}.png')
         plt.show()
 
-        # Plot and save normalized average score
-        plt.figure(figsize=(12, 6))
-        plt.plot(self.timesteps, self.normalized_scores, label='Normalized Average Score')
-        plt.xlabel('Timesteps')
-        plt.ylabel('Normalized Average Score')
-        plt.legend()
-        plt.title('Normalized Average Score vs Timesteps')
-        plt.savefig(f'./log/normalized_average_score_vs_timesteps_{current_time}.png')
-        plt.show()
+        # # Plot and save normalized average score
+        # plt.figure(figsize=(12, 6))
+        # plt.plot(self.timesteps, self.normalized_scores, label='Normalized Average Score')
+        # plt.xlabel('Timesteps')
+        # plt.ylabel('Normalized Average Score')
+        # plt.legend()
+        # plt.title('Normalized Average Score vs Timesteps')
+        # plt.savefig(f'./log/normalized_average_score_vs_timesteps_{current_time}.png')
+        # plt.show()
 
         # Plot and save f-loss
         plt.figure(figsize=(12, 6))
@@ -293,4 +336,14 @@ class Agent:
         plt.legend()
         plt.title('f-loss vs Timesteps')
         plt.savefig(f'./log/f_loss_{current_time}.png')
+        plt.show()
+        
+        #plot and save f-value
+        plt.figure(figsize=(12, 6))
+        plt.plot(self.time_step_f, self.f_value_record, label='f-value')
+        plt.xlabel('Timesteps')
+        plt.ylabel('f-value')
+        plt.legend()
+        plt.title('f-value vs Timesteps')
+        plt.savefig(f'./log/f_value_{current_time}.png')
         plt.show()

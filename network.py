@@ -15,9 +15,12 @@ class FullyConnectedNet(nn.Module):
             layers.append(activation())
         self.net = nn.Sequential(*layers)
 
-    def forward(self, x1, x2):
+    def forward(self, x1, x2 = None):
         # Concatenate the inputs along the feature dimension
-        x = torch.cat((x1, x2), dim=-1)
+        if x2 is None:
+            x = x1
+        else:
+            x = torch.cat((x1, x2), dim=-1)
         return self.net(x)
 
 # class FullyConnectedNet(nn.Module):
