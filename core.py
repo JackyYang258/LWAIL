@@ -67,13 +67,13 @@ class Agent:
 
     def train(self):
         # Retrieve parameters from self.args
-        self.sum_episodes_reward = 0
+        self.sum_episodes_reward = 0 # sum of rewards of episodes between evaluation, record for evaluation
         self.sum_episodes_num = 0
 
 
         while self.time_step <= self.args.max_training_timesteps:
             state = self.env.reset()
-            current_ep_reward = 0
+            current_ep_reward = 0 # reward for the current episode
 
             for step in range(1, self.args.max_ep_len + 1):
                 action = self.agent.select_action_withrandom(state)
@@ -82,6 +82,8 @@ class Agent:
                 done = done or step == self.args.max_ep_len
 
                 self.agent.buffer.add(state, action, next_state, reward, done)
+                
+                #temporate buffer for f_net update
                 self.sample_states.append(torch.FloatTensor(state))
                 self.sample_next_states.append(torch.FloatTensor(next_state))
 
@@ -96,19 +98,20 @@ class Agent:
                     if self.time_step < 20000000:
                         self.f_update()
 
-                    if self.time_step > self.args.max_training_timesteps-20000:
-                        print("before", self.agent.buffer.rewards[500:503])
+                    # if self.time_step > self.args.max_training_timesteps-20000:
+                    #     print("before", self.agent.buffer.rewards[500:503])
 
-                    self.get_pseudo_rewards()
+                    self.get_pseudo_rewards() # Update the buffer with pseudo rewards
                     
+                    # if self.time_step > self.args.max_training_timesteps-20000:
+                    #     print("after", self.agent.buffer.rewards[500:503])
 
                     if self.time_step > self.args.max_training_timesteps-20000:
-                        print("after", self.agent.buffer.rewards[500:503])
+                        self.print_pertubarion_results_for_test() # Print the results of the perturbation test
 
-                    if self.time_step > self.args.max_training_timesteps-20000:
-                        self.print_pertubarion_results_for_test()
-
-                    self.agent.update()
+                    self.agent.update() # Update the agent with the pseudo rewards
+                    
+                    # empty the buffer of f_net update
                     self.sample_states = []
                     self.sample_next_states = []
 
@@ -162,7 +165,7 @@ class Agent:
     def get_pseudo_rewards(self):
         coeff = 0.2
         with torch.no_grad():
-            if self.only_state:
+            if self.only_state: # If only_state is True, the f_net only takes the state (not state and next state) as input
                 expert_rewards = self.f_net(self.agent.buffer.next_state.to(self.device).float()).view(-1)
                 expert_rewards = -(expert_rewards - self.f_net(self.expert_states).mean()) * coeff
                 expert_rewards = expert_rewards.view(-1, 1).detach().cpu().numpy()
@@ -206,40 +209,39 @@ class Agent:
                     loss_f = (torch.mean(self.f_net(self.expert_states, self.expert_next_states)) - 
                         torch.mean(self.f_net(self.sample_states, self.sample_next_states)))
 
-            # Step 2: Compute the current mean output of f_net using expert states
+            # Compute the current mean output of f_net using expert states and calculate penalty
             if self.only_state:
                 current_mean_f_net = torch.mean(self.f_net(self.expert_states))
             else:
                 current_mean_f_net = torch.mean(self.f_net(self.expert_states, self.expert_next_states))
-            
-            # Step 3: Calculate the penalty term as the difference between current and previous mean outputs
             penalty = torch.square(current_mean_f_net - 0)
             coefficient = 0.03
-            # Step 4: Add this penalty to the original loss
+            
             total_loss_f = loss_f + coefficient * penalty
 
             if f_step == 1 and self.f_loss_record != []:
                 print(f'f_loss_difference after update ppo: {total_loss_f.item() - self.f_loss_record[-1]}')
                 first_loss_f = total_loss_f.item()
 
-            if converged and abs(previous_loss_f - total_loss_f) < 1e-3:
-                print(f'Converged at step {f_step}')
-                break
+            # if converged and abs(previous_loss_f - total_loss_f) < 1e-3:
+            #     print(f'Converged at step {f_step}')
+            #     break
 
-            if abs(previous_loss_f - total_loss_f) < 1e-5:
-                converged = True
-                print("1")
-                break
+            # if abs(previous_loss_f - total_loss_f) < 1e-5:
+            #     converged = True
+            #     print("1")
+            #     break
 
             # Optimize f_net by minimizing total_loss_f
             self.f_net.zero_grad()
             total_loss_f.backward()
             self.f_optimizer.step()
 
-            # Apply any additional weight adjustments (e.g., network_weight_matrices)
+            # Apply additional weight adjustments 
             self.f_net = network_weight_matrices(self.f_net, 1)
 
         
+        # record f_loss and f_value
         with torch.no_grad():
             if self.args.using_icvf:
                 loss_f = (torch.mean(self.f_net(self.phi_net(self.expert_states), self.phi_net(self.expert_next_states))) - torch.mean(self.f_net(self.phi_net(self.sample_states), self.phi_net(self.sample_next_states))))
@@ -249,7 +251,6 @@ class Agent:
                 else:
                     loss_f = (torch.mean(self.f_net(self.expert_states, self.expert_next_states)) 
                           - torch.mean(self.f_net(self.sample_states, self.sample_next_states)))
-
         print(f'f_loss_difference after update f: {loss_f.item() - first_loss_f}')
         if self.only_state:
             f_value = torch.mean(self.f_net(self.expert_states)).item()
