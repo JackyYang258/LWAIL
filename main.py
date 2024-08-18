@@ -10,6 +10,7 @@ from utils import set_seed_everywhere, print_args
 from network import FullyConnectedNet, network_weight_matrices, PhiNet
 from d4rl_uitls import make_env, get_dataset
 from core import Agent
+import wandb
 
 def main(args):
     time()
@@ -32,8 +33,10 @@ def main(args):
     
     time()
     
+    wandb.init(project='intentDICE', config=args, name=args.wandb_name)
     agent = Agent(state_dim, action_dim, env, expert_dataset, args)
     agent.train()
+    wandb.finish()
 
 
 
@@ -43,6 +46,7 @@ if __name__ == '__main__':
     
     # Environment
     parser.add_argument('--env_name', type=str, default='maze2d-open-dense-v0', help='Name of the environment to use.')
+    parser.add_argument('--wandb_name', type=str, default='maze', help='Name of the environment to use.')
     parser.add_argument('--seed', type=int, default=0, help='Random seed for reproducibility.')
 
     parser.add_argument('--icvf_path', type=str, default=None, help='Path to the ICVF model checkpoint.')

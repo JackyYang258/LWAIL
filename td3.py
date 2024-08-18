@@ -2,24 +2,47 @@ import copy
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import wandb
+import numpy as np
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
-class RolloutBuffer:
-    def __init__(self):
-        self.states = []
-        self.actions = []
-        self.next_states = []
-        self.rewards = []
-        self.is_terminals = []
-    
-    def clear(self):
-        del self.states[:]
-        del self.actions[:]
-        del self.next_states[:]
-        del self.rewards[:]
-        del self.is_terminals[:]
         
+class ReplayBuffer(object):
+    def __init__(self, state_dim, action_dim, max_size=int(1e6)):
+        self.max_size = max_size
+        self.ptr = 0
+        self.size = 0
+
+        self.state = np.zeros((max_size, state_dim))
+        self.action = np.zeros((max_size, action_dim))
+        self.next_state = np.zeros((max_size, state_dim))
+        self.reward = np.zeros((max_size, 1))
+        self.not_done = np.zeros((max_size, 1))
+
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+
+    def add(self, state, action, next_state, reward, done):
+        self.state[self.ptr] = state
+        self.action[self.ptr] = action
+        self.next_state[self.ptr] = next_state
+        self.reward[self.ptr] = reward
+        self.not_done[self.ptr] = 1. - done
+
+        self.ptr = (self.ptr + 1) % self.max_size
+        self.size = min(self.size + 1, self.max_size)
+
+
+    def sample(self, batch_size):
+        ind = np.random.randint(0, self.size, size=batch_size)
+
+        return (
+            torch.FloatTensor(self.state[ind]).to(self.device),
+            torch.FloatTensor(self.action[ind]).to(self.device),
+            torch.FloatTensor(self.next_state[ind]).to(self.device),
+            torch.FloatTensor(self.reward[ind]).to(self.device),
+            torch.FloatTensor(self.not_done[ind]).to(self.device)
+        )
 
 class Actor(nn.Module):
     def __init__(self, state_dim, action_dim, max_action):
@@ -105,41 +128,35 @@ class TD3:
         self.noise_clip = noise_clip
         self.policy_freq = policy_freq
         self.K_epochs = K_epochs
+        self.action_dim = action_dim
 
         self.total_it = 0
-        self.buffer = RolloutBuffer()
+        self.buffer = ReplayBuffer(state_dim, action_dim)
         self.device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+        self.update_count = 0
 
 
     def select_action(self, state):
         state = torch.FloatTensor(state.reshape(1, -1)).to(device)
         action = self.actor(state)
-        
-        self.buffer.states.append(state)
-        self.buffer.actions.append(action)
 
         return action.cpu().data.numpy().flatten()
     
-    def select_action_eval(self, state):
-        state = torch.FloatTensor(state.reshape(1, -1)).to(device)
-        action = self.actor(state)
-
-        return action.cpu().data.numpy().flatten()
+    def select_action_withrandom(self, state):
+        return self.select_action(state) + np.random.normal(0, self.max_action * 0.1, size=self.action_dim).clip(-self.max_action, self.max_action)
 
 
-    def update(self):
-        # Sample replay buffer 
+
+    def update(self, batch_size=256):
+        self.update_count = 0
+        for i in range(self.K_epochs):
+            self.update_count += 1
+            self.train(batch_size)
         
-        state = torch.squeeze(torch.stack(self.buffer.states, dim=0)).detach().to(device).float()
-        action = torch.squeeze(torch.stack(self.buffer.actions, dim=0)).detach().to(device).float()
-        next_state = torch.squeeze(torch.stack(self.buffer.next_states, dim=0)).detach().to(device).float()
-        not_done = ~torch.squeeze(torch.stack([torch.tensor(t) for t in self.buffer.is_terminals], dim=0)).detach().to(device)
-        reward = torch.tensor(self.buffer.rewards, dtype=torch.float32).to(device)
-        for _ in range(self.K_epochs):
-            self.train(state, action, next_state, reward, not_done)
-        
-    def train(self, state, action, next_state, reward, not_done):
+    def train(self, batch_size):
         self.total_it += 1
+        
+        state, action, next_state, reward, not_done = self.buffer.sample(batch_size)
 
         with torch.no_grad():
             # Select action according to policy and add clipped noise
@@ -160,6 +177,8 @@ class TD3:
 
         # Get current Q estimates
         current_Q1, current_Q2 = self.critic(state, action)
+        if(self.update_count == 1):
+            wandb.log({'current_Q1': current_Q1.mean().item(), 'current_Q2': current_Q2.mean().item()})
 
         # Compute critic loss
         critic_loss = F.mse_loss(current_Q1, target_Q) + F.mse_loss(current_Q2, target_Q)
