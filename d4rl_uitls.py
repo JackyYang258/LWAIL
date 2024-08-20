@@ -20,6 +20,8 @@ def get_dataset(env: gym.Env,
         npzfile = np.load(dataset_path)
         dataset = {key: npzfile[key] for key in npzfile}
 
+    if not 'actions' in dataset:
+        return dataset
     if clip_to_eps:
         lim = 1 - eps
         dataset['actions'] = np.clip(dataset['actions'], -lim, lim)

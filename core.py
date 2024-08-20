@@ -4,7 +4,7 @@ from tqdm import tqdm
 from network import network_weight_matrices, FullyConnectedNet, PhiNet
 from ppo import PPO
 from td3 import TD3
-from utils import time
+from utils import time, gradient_penalty
 import icecream as ic
 import d4rl
 import os
@@ -12,19 +12,23 @@ import matplotlib.pyplot as plt
 import gym
 from datetime import datetime
 import wandb
+import numpy as np
 
 class Agent:
     def __init__(self, state_dim, action_dim, env, expert_buffer, args):
         # Basic information
         self.args = args
-        self.only_state = False
+        self.only_state = True
+        self.expert_sample = True
         self.agent_kind = 'td3'
         if self.agent_kind == 'ppo':
-            self.agent = PPO(state_dim, action_dim, self.args.lr_actor, self.args.lr_critic, self.args.gamma, self.args.ppo_epochs, self.args.eps_clip, self.args.action_std_init)
+            self.agent = PPO(state_dim, action_dim, self.args.lr_actor, self.args.lr_critic, self.args.gamma, self.args.agent_epoch, self.args.eps_clip, self.args.action_std_init)
         if self.agent_kind == 'td3':
-            self.agent = TD3(state_dim, action_dim, self.args.lr_actor, self.args.lr_critic, self.args.ppo_epochs)
+            self.agent = TD3(state_dim, action_dim, self.args.lr_actor, self.args.lr_critic, self.args.agent_epoch)
         self.device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
         self.env = env
+        self.expert_states_buffer = torch.tensor(expert_buffer['observations']).float().to(self.device)
+        self.expert_next_states_buffer = torch.tensor(expert_buffer['next_observations']).float().to(self.device)
         self.expert_states = torch.tensor(expert_buffer['observations']).float().to(self.device)
         self.expert_next_states = torch.tensor(expert_buffer['next_observations']).float().to(self.device)
         self.hidden_dims = list(map(int, args.hidden_dim.split(',')))
@@ -60,7 +64,7 @@ class Agent:
             self.f_net = FullyConnectedNet(state_dim, self.hidden_dims).to('cuda:0')
         else:
             self.f_net = FullyConnectedNet(state_dim * 2, self.hidden_dims).to('cuda:0')
-        self.f_net = network_weight_matrices(self.f_net, 1)
+        # self.f_net = network_weight_matrices(self.f_net, 1)
         self.f_optimizer = torch.optim.Adam(self.f_net.parameters(), self.args.lr_f)
         
         os.makedirs('./log', exist_ok=True)
@@ -94,6 +98,12 @@ class Agent:
                 if self.time_step % self.args.update_timestep == 0:
                     self.sample_states = torch.squeeze(torch.stack(self.sample_states, dim=0)).detach().to(self.device)
                     self.sample_next_states = torch.squeeze(torch.stack(self.sample_next_states, dim=0)).detach().to(self.device)
+                    
+                    if self.expert_sample:
+                        # sample the same number of expert samples as the agent samples,store them in self.expert_states and self.expert_next_states
+                        expert_indices = torch.randint(0, len(self.expert_states_buffer), (len(self.sample_states),))
+                        self.expert_states = self.expert_states_buffer[expert_indices]
+                        self.expert_next_states = self.expert_next_states_buffer[expert_indices]
                     
                     if self.time_step < 20000000:
                         self.f_update()
@@ -129,6 +139,7 @@ class Agent:
 
             self.i_episode += 1
 
+        self.generate_heat()
         self.evaluate_policy()
 
     def evaluate_policy(self, goal_state=None, num_episodes=10):
@@ -143,7 +154,7 @@ class Agent:
             episode_rewards = []
 
             for step in range(1, 1000 + 1):
-                action = self.agent.select_action_eval(state)
+                action = self.agent.select_action(state)
                 next_state, reward, done, _ = env.step(action)
                 episode_states.append(state)
                 episode_rewards.append(reward)
@@ -165,8 +176,8 @@ class Agent:
     def get_pseudo_rewards(self):
         coeff = 0.2
         with torch.no_grad():
-            if self.only_state: # If only_state is True, the f_net only takes the state (not state and next state) as input
-                expert_rewards = self.f_net(self.agent.buffer.next_state.to(self.device).float()).view(-1)
+            if self.only_state:  # If only_state is True, the f_net only takes the state (not state and next state) as input
+                expert_rewards = self.f_net(torch.from_numpy(self.agent.buffer.next_state).to(self.device).float()).view(-1)
                 expert_rewards = -(expert_rewards - self.f_net(self.expert_states).mean()) * coeff
                 expert_rewards = expert_rewards.view(-1, 1).detach().cpu().numpy()
             else:
@@ -175,8 +186,8 @@ class Agent:
                                             ).view(-1)
                 expert_rewards = -(expert_rewards - self.f_net(self.expert_states, self.expert_next_states).mean()) * coeff
                 expert_rewards = expert_rewards.view(-1, 1).detach().cpu().numpy()
-                
-        self.agent.buffer.reward = expert_rewards
+
+        self.agent.buffer.rewards = expert_rewards
     
     def get_pseudo_rewards_for_test(self, state, next_state):
         coeff = 0.2
@@ -214,10 +225,18 @@ class Agent:
                 current_mean_f_net = torch.mean(self.f_net(self.expert_states))
             else:
                 current_mean_f_net = torch.mean(self.f_net(self.expert_states, self.expert_next_states))
-            penalty = torch.square(current_mean_f_net - 0)
-            coefficient = 0.03
+            penalty_f_value = torch.square(current_mean_f_net - 0)
+            coefficient = 0
             
-            total_loss_f = loss_f + coefficient * penalty
+            if self.only_state:
+                gradient_penalty_f = gradient_penalty(self.f_net, 
+                                                  self.expert_states,
+                                                  self.sample_states)
+            else:
+                gradient_penalty_f = gradient_penalty(self.f_net, 
+                                                    torch.cat((self.expert_states, self.expert_next_states), dim=-1), 
+                                                    torch.cat((self.sample_states, self.sample_next_states), dim=-1))
+            total_loss_f = loss_f + gradient_penalty_f + coefficient * penalty_f_value
 
             if f_step == 1 and self.f_loss_record != []:
                 print(f'f_loss_difference after update ppo: {total_loss_f.item() - self.f_loss_record[-1]}')
@@ -238,7 +257,7 @@ class Agent:
             self.f_optimizer.step()
 
             # Apply additional weight adjustments 
-            self.f_net = network_weight_matrices(self.f_net, 1)
+            # self.f_net = network_weight_matrices(self.f_net, 1)
 
         
         # record f_loss and f_value
@@ -308,4 +327,40 @@ class Agent:
         self.normalized_scores.append(normalized_score)
         self.sum_episodes_reward = 0
         self.sum_episodes_num = 0
-        
+    
+    def generate_heat(self):
+        # 定义输入范围和采样密度
+        x_min, x_max = 0, 5
+        y_min, y_max = 0, 5
+        density = 0.02
+
+        # 生成x和y坐标
+        x = np.arange(x_min, x_max, density)
+        y = np.arange(y_min, y_max, density)
+        X, Y = np.meshgrid(x, y)
+
+        # 将 f_net 设置为 evaluation 模式
+        self.f_net.eval()
+
+        # 生成输入数据，前两位是xy坐标，后两位是00
+        input_grid = np.c_[X.ravel(), Y.ravel(), np.zeros_like(X.ravel()), np.zeros_like(Y.ravel())]
+        input_tensor = torch.tensor(input_grid, dtype=torch.float32).float().to(self.device)
+
+        # 前向传播计算输出
+        with torch.no_grad():
+            output_tensor = self.f_net(input_tensor)
+
+        # 假设输出是标量值
+        Z = output_tensor.cpu().numpy().reshape(X.shape)
+
+        # 生成热力图
+        plt.figure(figsize=(8, 6))
+        plt.contourf(X, Y, Z, levels=100, cmap='viridis')
+        plt.colorbar(label='f_net output value')
+        plt.title('Heatmap of f_net output')
+        plt.xlabel('x')
+        plt.ylabel('y')
+
+        # Save the figure instead of displaying it
+        plt.savefig('log/heatmap_f_net_output.png')
+        plt.close()
