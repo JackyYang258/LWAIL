@@ -18,13 +18,14 @@ class Agent:
     def __init__(self, state_dim, action_dim, env, expert_buffer, args):
         # Basic information
         self.args = args
-        self.only_state = True
+        self.only_state = False
         self.expert_sample = True
+        max_action = float(env.action_space.high[0])
         self.agent_kind = 'td3'
         if self.agent_kind == 'ppo':
             self.agent = PPO(state_dim, action_dim, self.args.lr_actor, self.args.lr_critic, self.args.gamma, self.args.agent_epoch, self.args.eps_clip, self.args.action_std_init)
         if self.agent_kind == 'td3':
-            self.agent = TD3(state_dim, action_dim, self.args.lr_actor, self.args.lr_critic, self.args.agent_epoch)
+            self.agent = TD3(state_dim, action_dim, self.args.lr_actor, self.args.lr_critic, self.args.agent_epoch, max_action)
         self.device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
         self.env = env
         self.expert_states_buffer = torch.tensor(expert_buffer['observations']).float().to(self.device)
@@ -33,6 +34,7 @@ class Agent:
         self.expert_next_states = torch.tensor(expert_buffer['next_observations']).float().to(self.device)
         self.hidden_dims = list(map(int, args.hidden_dim.split(',')))
         torch.set_default_dtype(torch.float32)
+        self.filename = "f_net.pth"
         
         # Variable for record
         self.time_step = 0
@@ -80,12 +82,16 @@ class Agent:
             current_ep_reward = 0 # reward for the current episode
 
             for step in range(1, self.args.max_ep_len + 1):
-                action = self.agent.select_action_withrandom(state)
+                if self.time_step < self.args.start_timesteps:
+                    action = self.env.action_space.sample()
+                else:
+                    action = self.agent.select_action_withrandom(np.array(state))
                 next_state, reward, done, _ = self.env.step(action)
-                state = next_state
-                done = done or step == self.args.max_ep_len
+                done_bool = float(done)
 
-                self.agent.buffer.add(state, action, next_state, reward, done)
+                self.agent.buffer.add(state, action, next_state, reward, done_bool)
+                
+                state = next_state
                 
                 #temporate buffer for f_net update
                 self.sample_states.append(torch.FloatTensor(state))
@@ -105,19 +111,9 @@ class Agent:
                         self.expert_states = self.expert_states_buffer[expert_indices]
                         self.expert_next_states = self.expert_next_states_buffer[expert_indices]
                     
-                    if self.time_step < 20000000:
-                        self.f_update()
-
-                    # if self.time_step > self.args.max_training_timesteps-20000:
-                    #     print("before", self.agent.buffer.rewards[500:503])
+                    self.f_update()
 
                     self.get_pseudo_rewards() # Update the buffer with pseudo rewards
-                    
-                    # if self.time_step > self.args.max_training_timesteps-20000:
-                    #     print("after", self.agent.buffer.rewards[500:503])
-
-                    if self.time_step > self.args.max_training_timesteps-20000:
-                        self.print_pertubarion_results_for_test() # Print the results of the perturbation test
 
                     self.agent.update() # Update the agent with the pseudo rewards
                     
@@ -130,6 +126,9 @@ class Agent:
 
                 if self.time_step % self.args.eval_freq == 0:
                     self.evaluation()
+                
+                if self.time_step % 200000 == 0:
+                    self.generate_heat()
 
                 if done:
                     break
@@ -139,8 +138,8 @@ class Agent:
 
             self.i_episode += 1
 
-        self.generate_heat()
         self.evaluate_policy()
+        self.save_model()
 
     def evaluate_policy(self, goal_state=None, num_episodes=10):
         env = gym.make(self.args.env_name)
@@ -174,7 +173,7 @@ class Agent:
         print("mean rewards of all episodes:", sum(map(sum, all_rewards)) / num_episodes)
 
     def get_pseudo_rewards(self):
-        coeff = 0.2
+        coeff = 2
         with torch.no_grad():
             if self.only_state:  # If only_state is True, the f_net only takes the state (not state and next state) as input
                 expert_rewards = self.f_net(torch.from_numpy(self.agent.buffer.next_state).to(self.device).float()).view(-1)
@@ -190,24 +189,21 @@ class Agent:
         self.agent.buffer.rewards = expert_rewards
     
     def get_pseudo_rewards_for_test(self, state, next_state):
-        coeff = 0.2
+        coeff = 2
         with torch.no_grad():
             if self.only_state:
                 expert_rewards = self.f_net(next_state).view(-1)
                 expert_rewards = -(expert_rewards - self.f_net(self.expert_states).mean()) * coeff
-                expert_rewards = expert_rewards.tolist()
+                # expert_rewards = expert_rewards.tolist()
             else:
                 expert_rewards = self.f_net(state, next_state).view(-1)
                 expert_rewards = -(expert_rewards - self.f_net(self.expert_states, self.expert_next_states).mean()) * coeff
-                expert_rewards = expert_rewards.tolist()
+                # expert_rewards = expert_rewards.tolist()
         return expert_rewards
 
     def f_update(self):
-        previous_loss_f = float('inf')
-        converged = False
         first_loss_f = 0
         
-
         for f_step in range(1, self.args.f_epoch + 1):
             if self.args.using_icvf:
                 loss_f = (torch.mean(self.f_net(self.phi_net(self.expert_states), self.phi_net(self.expert_next_states))) - 
@@ -242,23 +238,10 @@ class Agent:
                 print(f'f_loss_difference after update ppo: {total_loss_f.item() - self.f_loss_record[-1]}')
                 first_loss_f = total_loss_f.item()
 
-            # if converged and abs(previous_loss_f - total_loss_f) < 1e-3:
-            #     print(f'Converged at step {f_step}')
-            #     break
-
-            # if abs(previous_loss_f - total_loss_f) < 1e-5:
-            #     converged = True
-            #     print("1")
-            #     break
-
             # Optimize f_net by minimizing total_loss_f
             self.f_net.zero_grad()
             total_loss_f.backward()
             self.f_optimizer.step()
-
-            # Apply additional weight adjustments 
-            # self.f_net = network_weight_matrices(self.f_net, 1)
-
         
         # record f_loss and f_value
         with torch.no_grad():
@@ -279,6 +262,73 @@ class Agent:
         self.f_value_record.append(f_value)
         self.f_loss_record.append(loss_f.item())
         self.time_step_f.append(self.time_step)
+    
+    def evaluation(self):
+        avg_reward = round(self.sum_episodes_reward / self.sum_episodes_num, 2)
+        normalized_score = d4rl.get_normalized_score(self.args.env_name, avg_reward)
+
+        self.timesteps.append(self.time_step)
+        wandb.log({'average_score': avg_reward, 'normalized_score': normalized_score})
+        self.avg_score.append(avg_reward)
+        self.normalized_scores.append(normalized_score)
+        self.sum_episodes_reward = 0
+        self.sum_episodes_num = 0
+    
+    def generate_heat(self):
+        # Define the input range and sampling density
+        x_min, x_max = 0, 5
+        y_min, y_max = 0, 5
+        density = 0.02
+
+        # Generate x and y coordinates
+        x = np.arange(x_min, x_max, density)
+        y = np.arange(y_min, y_max, density)
+        X, Y = np.meshgrid(x, y)
+
+        # Set f_net to evaluation mode
+        self.f_net.eval()
+
+        # Generate input data, first two are xy coordinates, last two are 00
+        input_grid = np.c_[X.ravel(), Y.ravel(), np.zeros_like(X.ravel()), np.zeros_like(Y.ravel())]
+        input_tensor = torch.tensor(input_grid, dtype=torch.float32).float().to(self.device)
+
+        # Perform forward pass to compute the output
+        with torch.no_grad():
+            output_tensor = self.get_pseudo_rewards_for_test(input_tensor, input_tensor)
+
+        # Assuming output is a scalar value
+        Z = output_tensor.cpu().numpy().reshape(X.shape)
+
+        # Generate heatmap
+        plt.figure(figsize=(8, 6))
+        plt.contourf(X, Y, Z, levels=100, cmap='viridis')
+        plt.colorbar(label='f_net output value')
+        plt.title('Heatmap of f_net output')
+        plt.xlabel('x')
+        plt.ylabel('y')
+
+        # Get the current timestep
+        timestep = str(self.time_step)
+
+        # Save the figure with the timestamp in the filename
+        plt.savefig(f'log/heatmap_f_net_output_{timestep}.png')
+        plt.close()
+        
+    def load_model(self):
+        """Load the f_net model from the specified filename in the 'model/' directory."""
+        path = os.path.join('model', self.filename)
+        if os.path.exists(path):
+            self.f_net.load_state_dict(torch.load(path))
+            print(f"Model loaded from {path}")
+        else:
+            print(f"No model found at {path}, starting with random weights.")
+
+    def save_model(self):
+        """Save the f_net model to the specified filename in the 'model/' directory."""
+        os.makedirs('model', exist_ok=True)
+        path = os.path.join('model', self.filename)
+        torch.save(self.f_net.state_dict(), path)
+        print(f"Model saved to {path}")
         
     def print_pertubarion_results_for_test(self):
         # Initial state
@@ -316,51 +366,3 @@ class Agent:
         for i in range(3):
             print(f"  {matrix[i*3:i*3+3]}")
         print("]")
-    
-    def evaluation(self):
-        avg_reward = round(self.sum_episodes_reward / self.sum_episodes_num, 2)
-        normalized_score = d4rl.get_normalized_score(self.args.env_name, avg_reward)
-
-        self.timesteps.append(self.time_step)
-        wandb.log({'average_score': avg_reward, 'normalized_score': normalized_score})
-        self.avg_score.append(avg_reward)
-        self.normalized_scores.append(normalized_score)
-        self.sum_episodes_reward = 0
-        self.sum_episodes_num = 0
-    
-    def generate_heat(self):
-        # 定义输入范围和采样密度
-        x_min, x_max = 0, 5
-        y_min, y_max = 0, 5
-        density = 0.02
-
-        # 生成x和y坐标
-        x = np.arange(x_min, x_max, density)
-        y = np.arange(y_min, y_max, density)
-        X, Y = np.meshgrid(x, y)
-
-        # 将 f_net 设置为 evaluation 模式
-        self.f_net.eval()
-
-        # 生成输入数据，前两位是xy坐标，后两位是00
-        input_grid = np.c_[X.ravel(), Y.ravel(), np.zeros_like(X.ravel()), np.zeros_like(Y.ravel())]
-        input_tensor = torch.tensor(input_grid, dtype=torch.float32).float().to(self.device)
-
-        # 前向传播计算输出
-        with torch.no_grad():
-            output_tensor = self.f_net(input_tensor)
-
-        # 假设输出是标量值
-        Z = output_tensor.cpu().numpy().reshape(X.shape)
-
-        # 生成热力图
-        plt.figure(figsize=(8, 6))
-        plt.contourf(X, Y, Z, levels=100, cmap='viridis')
-        plt.colorbar(label='f_net output value')
-        plt.title('Heatmap of f_net output')
-        plt.xlabel('x')
-        plt.ylabel('y')
-
-        # Save the figure instead of displaying it
-        plt.savefig('log/heatmap_f_net_output.png')
-        plt.close()

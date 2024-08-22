@@ -54,6 +54,7 @@ if __name__ == '__main__':
     
     # Important Training arguments
     parser.add_argument('--max_training_timesteps', type=int, default=1000000, help='Maximum number of timesteps for training.')
+    parser.add_argument('--start_timesteps', type=int, default=1e4, help='Number of timesteps to start training the agent.')
     parser.add_argument('--f_epoch', type=int, default=50, help='Number of epochs for training the function network.')
     parser.add_argument('--agent_epoch', type=int, default=50, help='Number of epochs for PPO training.')
     parser.add_argument('--lr_f', type=float, default=1e-3, help='Learning rate for the function network.')
