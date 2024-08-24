@@ -28,6 +28,8 @@ class Agent:
             self.agent = TD3(state_dim, action_dim, self.args.lr_actor, self.args.lr_critic, self.args.agent_epoch, max_action)
         self.device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
         self.env = env
+        self.max_action = float(env.action_space.high[0])
+        print(f"max_action: {self.max_action}")
         self.expert_states_buffer = torch.tensor(expert_buffer['observations']).float().to(self.device)
         self.expert_next_states_buffer = torch.tensor(expert_buffer['next_observations']).float().to(self.device)
         self.expert_states = torch.tensor(expert_buffer['observations']).float().to(self.device)
@@ -44,13 +46,6 @@ class Agent:
         self.sample_states = []
         self.sample_next_states = []
         self.previous_f_value = 0
-        
-        self.timesteps = []
-        self.avg_score = []
-        self.normalized_scores = []
-        self.f_loss_record = []
-        self.time_step_f = []
-        self.f_value_record = []
         
         # Network initialization
         if self.args.using_icvf:
@@ -78,6 +73,7 @@ class Agent:
 
 
         while self.time_step <= self.args.max_training_timesteps:
+            print(f"Time step: {self.time_step}")
             state = self.env.reset()
             current_ep_reward = 0 # reward for the current episode
 
@@ -100,7 +96,7 @@ class Agent:
                 self.time_step += 1
                 current_ep_reward += reward
 
-                # Update if it's time
+                # Update f if it's time
                 if self.time_step % self.args.update_timestep == 0:
                     self.sample_states = torch.squeeze(torch.stack(self.sample_states, dim=0)).detach().to(self.device)
                     self.sample_next_states = torch.squeeze(torch.stack(self.sample_next_states, dim=0)).detach().to(self.device)
@@ -114,12 +110,12 @@ class Agent:
                     self.f_update()
 
                     self.get_pseudo_rewards() # Update the buffer with pseudo rewards
-
-                    self.agent.update() # Update the agent with the pseudo rewards
-                    
                     # empty the buffer of f_net update
                     self.sample_states = []
                     self.sample_next_states = []
+                
+                if self.time_step > self.args.update_timestep * 2:
+                    self.agent.update()
 
                 if self.time_step % self.args.action_std_decay_frequency == 0 and self.agent_kind == 'ppo':
                     self.agent.decay_action_std(self.args.action_std_decay_rate, self.args.min_action_std)
@@ -234,10 +230,6 @@ class Agent:
                                                     torch.cat((self.sample_states, self.sample_next_states), dim=-1))
             total_loss_f = loss_f + gradient_penalty_f + coefficient * penalty_f_value
 
-            if f_step == 1 and self.f_loss_record != []:
-                print(f'f_loss_difference after update ppo: {total_loss_f.item() - self.f_loss_record[-1]}')
-                first_loss_f = total_loss_f.item()
-
             # Optimize f_net by minimizing total_loss_f
             self.f_net.zero_grad()
             total_loss_f.backward()
@@ -253,14 +245,11 @@ class Agent:
                 else:
                     loss_f = (torch.mean(self.f_net(self.expert_states, self.expert_next_states)) 
                           - torch.mean(self.f_net(self.sample_states, self.sample_next_states)))
-        print(f'f_loss_difference after update f: {loss_f.item() - first_loss_f}')
         if self.only_state:
             f_value = torch.mean(self.f_net(self.expert_states)).item()
         else:
             f_value = torch.mean(self.f_net(self.expert_states, self.expert_next_states)).item()
         wandb.log({'f_loss': loss_f.item(), 'f_value': f_value},commit=False)
-        self.f_value_record.append(f_value)
-        self.f_loss_record.append(loss_f.item())
         self.time_step_f.append(self.time_step)
     
     def evaluation(self):
@@ -269,8 +258,6 @@ class Agent:
 
         self.timesteps.append(self.time_step)
         wandb.log({'average_score': avg_reward, 'normalized_score': normalized_score})
-        self.avg_score.append(avg_reward)
-        self.normalized_scores.append(normalized_score)
         self.sum_episodes_reward = 0
         self.sum_episodes_num = 0
     

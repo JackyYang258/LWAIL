@@ -5,7 +5,7 @@ import gym
 import torch
 
 import sys
-sys.path.append('/scratch/bdaw/kaiyan289/intentDICE')
+sys.path.append('/scratch/bdaw/kaiyan289/IntentDICE')
 from utils import set_seed_everywhere, print_args
 from network import FullyConnectedNet, network_weight_matrices, PhiNet
 from d4rl_uitls import make_env, get_dataset
@@ -20,7 +20,7 @@ def main(args):
     action_dim = env.action_space.shape[0]
     
     env = make_env(args.env_name)
-    expert_dataset = get_dataset(env, using_d4rl=False, dataset_path='/scratch/bdaw/kaiyan289/intentDICE/dataset/maze2d_expert_dataset.npz')
+    expert_dataset = get_dataset(env, using_d4rl=False, dataset_path='/scratch/bdaw/kaiyan289/IntentDICE/dataset/maze2d_expert_dataset.npz')
         
     set_seed_everywhere(args.seed)
     #print informations about the environment

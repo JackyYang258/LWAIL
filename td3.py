@@ -143,15 +143,13 @@ class TD3:
     def select_action_withrandom(self, state):
         return self.select_action(state) + np.random.normal(0, self.max_action * 0.1, size=self.action_dim).clip(-self.max_action, self.max_action)
 
-
-
     def update(self, batch_size=256):
         self.update_count = 0
         for i in range(self.K_epochs):
             self.update_count += 1
             self.train(batch_size)
-        
-    def train(self, batch_size):
+
+    def train(self, batch_size = 256):
         self.total_it += 1
         
         state, action, next_state, reward, not_done = self.buffer.sample(batch_size)
@@ -173,8 +171,6 @@ class TD3:
 
         # Get current Q estimates
         current_Q1, current_Q2 = self.critic(state, action)
-        if(self.update_count == 1):
-            wandb.log({'current_Q1': current_Q1.mean().item()})
 
         # Compute critic loss
         critic_loss = F.mse_loss(current_Q1, target_Q) + F.mse_loss(current_Q2, target_Q)
