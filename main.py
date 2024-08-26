@@ -2,14 +2,12 @@ from utils import time
 time()
 
 import gym
-import torch
 
 import sys
 sys.path.append('/scratch/bdaw/kaiyan289/IntentDICE')
 from utils import set_seed_everywhere, print_args
-from network import FullyConnectedNet, network_weight_matrices, PhiNet
 from d4rl_uitls import make_env, get_dataset
-from core import Agent
+from core_old import Agent
 import wandb
 
 def main(args):
@@ -20,8 +18,9 @@ def main(args):
     action_dim = env.action_space.shape[0]
     
     env = make_env(args.env_name)
-    expert_dataset = get_dataset(env, using_d4rl=False, dataset_path='/scratch/bdaw/kaiyan289/IntentDICE/dataset/maze2d_expert_dataset.npz')
-        
+    expert_dataset = get_dataset(env, using_d4rl=True, dataset_path='/scratch/bdaw/kaiyan289/IntentDICE/dataset/maze2d_expert_dataset.npz')
+    print("dataset size:", expert_dataset['observations'].shape[0])
+    
     set_seed_everywhere(args.seed)
     #print informations about the environment
     print('state_dim:', state_dim)
@@ -33,8 +32,9 @@ def main(args):
     
     time()
     
-    wandb.init(project='intentDICE', config=args, name=args.wandb_name)
+    wandb.init(project='intentDICE', config=args, name=args.wandb_name, mode='online')
     agent = Agent(state_dim, action_dim, env, expert_dataset, args)
+    print("======== start training ==========")
     agent.train()
     wandb.finish()
 
@@ -45,11 +45,11 @@ if __name__ == '__main__':
     parser = ArgumentParser()
     
     # Environment
-    parser.add_argument('--env_name', type=str, default='maze2d-open-dense-v0', help='Name of the environment to use.')
+    parser.add_argument('--env_name', type=str, default='hopper-expert-v2', help='Name of the environment to use.')
     parser.add_argument('--wandb_name', type=str, default='maze', help='Name of the environment to use.')
     parser.add_argument('--seed', type=int, default=0, help='Random seed for reproducibility.')
 
-    parser.add_argument('--icvf_path', type=str, default=None, help='Path to the ICVF model checkpoint.')
+    parser.add_argument('--icvf_path', type=str, default="/scratch/bdaw/kaiyan289/IntentDICE/model/maze2d-open-dense-v0.pt", help='Path to the ICVF model checkpoint.')
     parser.add_argument('--using_icvf', default=False, help='Flag to indicate whether to use ICVF.')
     
     # Important Training arguments
@@ -57,6 +57,7 @@ if __name__ == '__main__':
     parser.add_argument('--start_timesteps', type=int, default=1e4, help='Number of timesteps to start training the agent.')
     parser.add_argument('--f_epoch', type=int, default=50, help='Number of epochs for training the function network.')
     parser.add_argument('--agent_epoch', type=int, default=50, help='Number of epochs for PPO training.')
+    parser.add_argument('--reward_coeff', type=float, default=1.0, help='Coefficient for the reward term.')
     parser.add_argument('--lr_f', type=float, default=1e-3, help='Learning rate for the function network.')
     parser.add_argument('--lr_actor', type=float, default=3e-4, help='Learning rate for the actor network.')
     parser.add_argument('--lr_critic', type=float, default=1e-3, help='Learning rate for the critic network.')

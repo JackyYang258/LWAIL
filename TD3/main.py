@@ -59,7 +59,7 @@ if __name__ == "__main__":
 	
 	parser = argparse.ArgumentParser()
 	parser.add_argument("--policy", default="TD3")                  # Policy name (TD3, DDPG or OurDDPG)
-	parser.add_argument("--env", default="maze2d-open-dense-v0")          # OpenAI gym environment name
+	parser.add_argument("--env", default="maze2d-medium-dense-v0")          # OpenAI gym environment name
 	parser.add_argument("--seed", default=0, type=int)              # Sets Gym, PyTorch and Numpy seeds
 	parser.add_argument("--start_timesteps", default=25e3, type=int)# Time steps initial random policy is used
 	parser.add_argument("--eval_freq", default=5e3, type=int)       # How often (time steps) we evaluate
@@ -135,42 +135,7 @@ if __name__ == "__main__":
 		print(f"Model loaded from {path}")
 	else:
 		print(f"No model found at {path}, starting with random weights.")
-	import matplotlib.pyplot as plt
-	# Define the input range and sampling density
-	x_min, x_max = 0, 5
-	y_min, y_max = 0, 5
-	density = 0.02
 
-	# Generate x and y coordinates
-	x = np.arange(x_min, x_max, density)
-	y = np.arange(y_min, y_max, density)
-	X, Y = np.meshgrid(x, y)
-
-	# Set f_net to evaluation mode
-	f_net.eval()
-
-	# Generate input data, first two are xy coordinates, last two are 00
-	input_grid = np.c_[X.ravel(), Y.ravel(), np.zeros_like(X.ravel()), np.zeros_like(Y.ravel())]
-	input_tensor = torch.tensor(input_grid, dtype=torch.float32).float().to(device)
-
-	# Perform forward pass to compute the output
-	output_tensor = f_net(input_tensor)
-
-	# Assuming output is a scalar value
-	Z = -output_tensor.cpu().detach().numpy().reshape(X.shape) + 3
-
-	# Generate heatmap
-	plt.figure(figsize=(8, 6))
-	plt.contourf(X, Y, Z, levels=100, cmap='viridis')
-	plt.colorbar(label='f_net output value')
-	plt.title('Heatmap of f_net output')
-	plt.xlabel('x')
-	plt.ylabel('y')
-
-
-	# Save the figure with the timestamp in the filename
-	plt.savefig(f'log/heatmap_f_net_output.png')
-	plt.close()
 	state, done = env.reset(), False
 	episode_reward = 0
 	episode_timesteps = 0

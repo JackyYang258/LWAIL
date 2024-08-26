@@ -45,6 +45,8 @@ class PhiNet(nn.Module):
             if i + 1 < len(hidden_dims) or activate_final:
                 layers.append(activation())
         self.net = nn.Sequential(*layers)
+    def forward(self, x):
+        return self.net(x) 
     
 def network_weight_matrices(model, max_norm, eps=1e-8):
     for module in model.modules():
