@@ -13,6 +13,7 @@ import wandb
 def main(args):
     time()
     # initialize environment
+    set_seed_everywhere(args.seed)
     env = gym.make(args.env_name)  # Change to your desired D4RL environment
     state_dim = env.observation_space.shape[0]
     action_dim = env.action_space.shape[0]
@@ -21,7 +22,6 @@ def main(args):
     expert_dataset = get_dataset(env, using_d4rl=True, dataset_path='/scratch/bdaw/kaiyan289/IntentDICE/dataset/maze2d_expert_dataset.npz')
     print("dataset size:", expert_dataset['observations'].shape[0])
     
-    set_seed_everywhere(args.seed)
     #print informations about the environment
     print('state_dim:', state_dim)
     print('action_dim:', action_dim)
@@ -49,8 +49,10 @@ if __name__ == '__main__':
     parser.add_argument('--wandb_name', type=str, default='maze', help='Name of the environment to use.')
     parser.add_argument('--seed', type=int, default=0, help='Random seed for reproducibility.')
 
-    parser.add_argument('--icvf_path', type=str, default="/scratch/bdaw/kaiyan289/IntentDICE/model/maze2d-open-dense-v0.pt", help='Path to the ICVF model checkpoint.')
-    parser.add_argument('--using_icvf', default=False, help='Flag to indicate whether to use ICVF.')
+    parser.add_argument('--icvf_path', type=str, default="/scratch/bdaw/kaiyan289/IntentDICE/model/hopper.pt", help='Path to the ICVF model checkpoint.')
+    parser.add_argument('--using_icvf', default=True, help='Flag to indicate whether to use ICVF.')
+    parser.add_argument('--only_state', default=False)
+    parser.add_argument('--update_everystep', default=False)
     
     # Important Training arguments
     parser.add_argument('--max_training_timesteps', type=int, default=1000000, help='Maximum number of timesteps for training.')

@@ -133,7 +133,6 @@ class TD3:
         self.total_it = 0
         self.buffer = ReplayBuffer(state_dim, action_dim)
         self.device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
-        self.update_count = 0
 
 
     def select_action(self, state):
@@ -144,9 +143,7 @@ class TD3:
         return self.select_action(state) + np.random.normal(0, self.max_action * 0.1, size=self.action_dim).clip(-self.max_action, self.max_action)
 
     def update(self, batch_size=256):
-        self.update_count = 0
         for i in range(self.K_epochs):
-            self.update_count += 1
             self.train(batch_size)
 
     def train(self, batch_size = 256):

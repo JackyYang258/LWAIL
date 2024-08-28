@@ -156,7 +156,7 @@ class Agent:
                     expert_rewards = self.f_net(self.phi_net(self.expert_states), self.phi_net(self.expert_next_states)).view(-1)
                     expert_rewards = -(expert_rewards - self.f_net(self.phi_net(self.sample_states), self.phi_net(self.sample_next_states)).mean()) * coeff
                     expert_rewards = expert_rewards.view(-1, 1).detach().cpu().numpy()
-                else
+                else:
                     expert_rewards = self.f_net(torch.from_numpy(self.agent.buffer.state).to(self.device).float(), 
                                                 torch.from_numpy(self.agent.buffer.next_state).to(self.device).float()
                                                 ).view(-1)

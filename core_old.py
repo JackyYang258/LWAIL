@@ -18,8 +18,9 @@ class Agent:
     def __init__(self, state_dim, action_dim, env, expert_buffer, args):
         # Basic information
         self.args = args
-        self.only_state = False
+        self.only_state = args.only_state
         self.expert_sample = True
+        self.update_everystep = args.update_everystep
         max_action = float(env.action_space.high[0])
         self.agent_kind = 'td3'
         if self.agent_kind == 'ppo':
@@ -63,7 +64,7 @@ class Agent:
             self.phi_net = None
             print('Not using ICVF')
 
-        if self.only_state == True:
+        if self.only_state:
             if self.args.using_icvf:
                 self.f_net = FullyConnectedNet(256, self.hidden_dims).to('cuda:0')
             else:
@@ -73,6 +74,7 @@ class Agent:
                 self.f_net = FullyConnectedNet(256 * 2, self.hidden_dims).to('cuda:0')
             else:
                 self.f_net = FullyConnectedNet(state_dim * 2, self.hidden_dims).to('cuda:0')
+        print("f_net:", self.f_net)
         # self.f_net = network_weight_matrices(self.f_net, 1)
         self.f_optimizer = torch.optim.Adam(self.f_net.parameters(), self.args.lr_f)
 
@@ -108,16 +110,21 @@ class Agent:
 
                     self.get_pseudo_rewards() # Update the buffer with pseudo rewards
 
-                    self.agent.update() # Update the agent with the pseudo rewards
+                    if not self.update_everystep:
+                        self.agent.update() # Update the agent with the pseudo rewards
                     
                     # empty the buffer of f_net update
                     self.sample_states = []
                     self.sample_next_states = []
-                    if self.time_step % 200000 == 0:
-                        self.generate_heat()
+                    # if self.time_step % 200000 == 0:
+                    #     self.generate_heat()
 
+                if self.update_everystep and self.time_step > self.args.update_timestep:
+                    self.agent.train()
+                    
                 if self.time_step % self.args.eval_freq == 0:
                     self.evaluation()
+                    self.evaluate_policy()
                 
                 if done:
                     break
@@ -126,7 +133,6 @@ class Agent:
             self.sum_episodes_num += 1
             self.i_episode += 1
 
-        self.evaluate_policy()
         self.save_model()
 
     def get_pseudo_rewards(self):
@@ -215,8 +221,8 @@ class Agent:
     
     def evaluation(self):
         avg_reward = round(self.sum_episodes_reward / self.sum_episodes_num, 2)
-        normalized_score = d4rl.get_normalized_score(self.args.env_name, avg_reward)
-        wandb.log({'average_score': avg_reward, 'normalized_score': normalized_score}, step=self.time_step)
+        normalized_score = d4rl.get_normalized_score(self.args.env_name, avg_reward) * 100
+        wandb.log({'train_average_score': avg_reward, 'train_normalized_score': normalized_score}, step=self.time_step)
         self.sum_episodes_reward = 0
         self.sum_episodes_num = 0
     
@@ -276,35 +282,27 @@ class Agent:
         torch.save(self.f_net.state_dict(), path)
         print(f"Model saved to {path}")
 
-    def evaluate_policy(self, goal_state=None, num_episodes=10):
+    def evaluate_policy(self, num_episodes=10):
         env = gym.make(self.args.env_name)
-        all_states = []
         all_rewards = []
 
         for episode in range(num_episodes):
             state = env.reset()
             done = False
-            episode_states = []
-            episode_rewards = []
+            episode_rewards = 0
 
-            for step in range(1, 1000 + 1):
+            for step in range(1, self.args.max_ep_len + 1):
                 action = self.agent.select_action(state)
                 next_state, reward, done, _ = env.step(action)
-                episode_states.append(state)
-                episode_rewards.append(reward)
+                episode_rewards += reward
                 state = next_state
                 if done:
                     break
-
-            all_states.append(episode_states)
             all_rewards.append(episode_rewards)
-
         env.close()
-        print("Visited states and distances to goal in each episode:")
-        for i, (episode_states, episode_rewards) in enumerate(zip(all_states, all_rewards)):
-            print(f"Episode {i+1}:")
-            print("sum of rewards:", sum(episode_rewards))
-        print("mean rewards of all episodes:", sum(map(sum, all_rewards)) / num_episodes)
+        all_rewards = np.array(all_rewards)
+        normalized_score = d4rl.get_normalized_score(self.args.env_name, all_rewards.mean()) * 100
+        wandb.log({'eval_average_score': all_rewards.mean(), 'eval_normalized_score': normalized_score, 'eval_score_std': all_rewards.std()}, step=self.time_step)
 
     def get_pseudo_rewards_for_test(self, state, next_state):
         coeff = self.args.reward_coeff

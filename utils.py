@@ -18,10 +18,11 @@ def time():
     print("Current Time:", formatted_time)
     
 def set_seed_everywhere(env: gym.Env, seed=0):
-    random.seed(seed)
+    random.seed(seed) 
     np.random.seed(seed)
     torch.manual_seed(seed)
     os.environ["PYTHONHASHSEED"] = str(seed)
+    torch.backends.cudnn.deterministic = True
     
 def get_normalized_score(env_name, score):
     ref_min_score = d4rl.infos.REF_MIN_SCORE[env_name]
