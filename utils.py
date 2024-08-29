@@ -21,6 +21,7 @@ def set_seed_everywhere(env: gym.Env, seed=0):
     random.seed(seed) 
     np.random.seed(seed)
     torch.manual_seed(seed)
+    env.seed(seed)
     os.environ["PYTHONHASHSEED"] = str(seed)
     torch.backends.cudnn.deterministic = True
     

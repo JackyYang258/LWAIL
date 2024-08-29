@@ -7,14 +7,14 @@ import sys
 sys.path.append('/scratch/bdaw/kaiyan289/IntentDICE')
 from utils import set_seed_everywhere, print_args
 from d4rl_uitls import make_env, get_dataset
-from core_old import Agent
+from core import Agent
 import wandb
 
 def main(args):
     time()
     # initialize environment
-    set_seed_everywhere(args.seed)
     env = gym.make(args.env_name)  # Change to your desired D4RL environment
+    # set_seed_everywhere(env, args.seed)
     state_dim = env.observation_space.shape[0]
     action_dim = env.action_space.shape[0]
     
@@ -63,6 +63,7 @@ if __name__ == '__main__':
     parser.add_argument('--lr_f', type=float, default=1e-3, help='Learning rate for the function network.')
     parser.add_argument('--lr_actor', type=float, default=3e-4, help='Learning rate for the actor network.')
     parser.add_argument('--lr_critic', type=float, default=1e-3, help='Learning rate for the critic network.')
+    parser.add_argument('--alpha', type=int, default=10)
     
     parser.add_argument('--hidden_dim', type=str, default='64,64', help='Comma-separated list of hidden dimensions for the network.')
     parser.add_argument('--max_ep_len', type=int, default=1000, help='Maximum length of each episode.')
@@ -71,8 +72,4 @@ if __name__ == '__main__':
     
     parser.add_argument('--gamma', type=float, default=0.99, help='Discount factor for rewards.')
     parser.add_argument('--eps_clip', type=float, default=0.2, help='Clip parameter for PPO.')
-    parser.add_argument('--action_std_decay_frequency', type=int, default=int(2e5), help='Frequency of action standard deviation decay.')
-    parser.add_argument('--action_std_decay_rate', type=float, default=0.05, help='Decay rate of the action standard deviation.')
-    parser.add_argument('--min_action_std', type=float, default=0.1, help='Minimum value of action standard deviation.')
-    parser.add_argument('--action_std_init', type=float, default=0.6, help='Initial standard deviation of action distribution.')
     main(parser.parse_args())
