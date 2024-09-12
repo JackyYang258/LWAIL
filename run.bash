@@ -1,0 +1,11 @@
+python main.py \
+--env_name maze2d-open-dense-v0 \
+--f_epoch 100 \
+--max_training_timesteps 100010 \
+--update_timestep 2000 \
+--using_icvf False \
+--update_everystep True \
+--reward_coeff 0.1 \
+--max_ep_len 1000 \
+--alpha 10 \
+--wandb_name maze2d_pretrain

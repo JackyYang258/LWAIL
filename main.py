@@ -2,7 +2,7 @@ from utils import time
 time()
 
 import gym
-
+import d4rl
 import sys
 sys.path.append('/scratch/bdaw/kaiyan289/IntentDICE')
 from utils import set_seed_everywhere, print_args
@@ -14,12 +14,11 @@ def main(args):
     time()
     # initialize environment
     env = gym.make(args.env_name)  # Change to your desired D4RL environment
-    # set_seed_everywhere(env, args.seed)
+    set_seed_everywhere(env, args.seed)
     state_dim = env.observation_space.shape[0]
     action_dim = env.action_space.shape[0]
-    
-    env = make_env(args.env_name)
-    expert_dataset = get_dataset(env, using_d4rl=True, dataset_path='/scratch/bdaw/kaiyan289/IntentDICE/dataset/maze2d_expert_dataset.npz')
+
+    expert_dataset = get_dataset(args.env_name)
     print("dataset size:", expert_dataset['observations'].shape[0])
     
     #print informations about the environment
@@ -29,6 +28,12 @@ def main(args):
     print('action_space:', env.action_space)
     
     print_args(args)
+    if args.using_icvf:
+        print("Using ICVF")
+    if args.only_state:
+        print("Only state")
+    if args.update_everystep:
+        print("Update every step")
     
     time()
     

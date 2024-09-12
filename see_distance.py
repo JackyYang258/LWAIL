@@ -52,7 +52,7 @@ dones = dataset['terminals']
 
 # Find the end of the trajectory
 print(dones.argmax())
-trajectory_end = 400
+trajectory_end = 2000
 print('Trajectory end:', trajectory_end)
 
 # Select the trajectory

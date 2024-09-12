@@ -1,5 +1,6 @@
 **log/
 dataset/
+d4rl_datasets/
 wandb/
 model/
 *.swp

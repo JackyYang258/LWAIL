@@ -33,7 +33,7 @@ for task in tasks:
              actions=dataset['actions'],
              rewards=dataset['rewards'],
              terminals=dataset['terminals'],
-             next_observations=dataset['next_observations'])
+             next_observations=dataset.get('next_observations', None))
     
     print(f"Dataset saved at: {save_path}")
 

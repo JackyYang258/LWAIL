@@ -3,22 +3,31 @@ import gym
 import numpy as np
 
 import time
+import os
 
 def make_env(env_name: str):
     env = gym.make(env_name)
     env = EpisodeMonitor(env)
     return env
 
-def get_dataset(env: gym.Env,
-                using_d4rl: bool,
-                dataset_path: str,
+def get_dataset(env_name: str,
                 clip_to_eps: bool = True,
                 eps: float = 1e-5,):
-    if using_d4rl:
-        dataset = d4rl.qlearning_dataset(env)
-    else:
-        npzfile = np.load(dataset_path)
-        dataset = {key: npzfile[key] for key in npzfile}
+    save_dir = "/projects/bdaw/kaiyan289/IntentDICE/d4rl_datasets"
+    save_path = os.path.join(save_dir, f"{env_name}.npz")
+    if 'maze' in env_name:
+        save_path = "/projects/bdaw/kaiyan289/IntentDICE/d4rl_datasets/maze2d_expert_dataset.npz"
+    print(f"Loading dataset for path: {save_path}")
+    if not os.path.exists(save_path):
+        raise FileNotFoundError(f"Dataset file not found for task: {save_path}")
+    data = np.load(save_path)
+    dataset = {
+        'observations': data['observations'],
+        'actions': data['actions'],
+        'rewards': data['rewards'],
+        'terminals': data['terminals'],
+        'next_observations': data['next_observations'] if 'next_observations' in data else None
+    }
 
     if not 'actions' in dataset:
         return dataset
