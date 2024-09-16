@@ -2,7 +2,9 @@
 dataset/
 d4rl_datasets/
 wandb/
+TD3/models/
 model/
+visual/
 *.swp
 # Byte-compiled / optimized / DLL files
 **__pycache__/

@@ -17,23 +17,38 @@ print("=========================================================================
 
 ################################## PPO Policy ##################################
 class RolloutBuffer:
-    def __init__(self):
-        self.actions = []
-        self.states = []
-        self.logprobs = []
-        self.rewards = []
-        self.state_values = []
-        self.is_terminals = []
-        self.next_states = []
+    def __init__(self, max_buffer_size, state_dim, action_dim):
+        print("RolloutBuffer initialized with max_buffer_size: ", max_buffer_size)
+        self.max_buffer_size = max_buffer_size
+        self.ptr = 0
+        self.device = device
+        
+        # 预分配张量空间
+        self.state = torch.zeros((max_buffer_size, state_dim), dtype=torch.float32).to(device)
+        self.action = torch.zeros((max_buffer_size, action_dim), dtype=torch.float32).to(device)
+        self.logprob = torch.zeros(max_buffer_size, dtype=torch.float32).to(device)
+        self.reward = torch.zeros(max_buffer_size, dtype=torch.float32).to(device)
+        self.state_value = torch.zeros(max_buffer_size, dtype=torch.float32).to(device)
+        self.is_terminal = torch.zeros(max_buffer_size, dtype=torch.float32).to(device)
+        self.next_state = torch.zeros((max_buffer_size, state_dim), dtype=torch.float32).to(device)
+    
+    def store(self, state, action, logprob, state_value, next_state, reward, is_terminal):
+        if self.ptr < self.max_buffer_size:
+            # 存储数据到预分配的张量中
+            self.state[self.ptr] = state
+            self.action[self.ptr] = action
+            self.logprob[self.ptr] = logprob
+            self.state_value[self.ptr] = state_value
+            self.next_state[self.ptr] = next_state
+            self.reward[self.ptr] = reward
+            self.is_terminal[self.ptr] = is_terminal
+            self.ptr += 1
+        else:
+            print("Buffer overflow! Consider increasing buffer size.")
     
     def clear(self):
-        del self.actions[:]
-        del self.states[:]
-        del self.logprobs[:]
-        del self.rewards[:]
-        del self.state_values[:]
-        del self.is_terminals[:]
-        del self.next_states[:]
+        assert self.ptr == self.max_buffer_size
+        self.ptr = 0
 
 
 class ActorCritic(nn.Module):
@@ -97,13 +112,13 @@ class ActorCritic(nn.Module):
 
 
 class PPO:
-    def __init__(self, state_dim, action_dim, lr_actor, lr_critic, gamma, K_epochs, eps_clip, action_std_init=0.6):
+    def __init__(self, state_dim, action_dim, lr_actor, lr_critic, gamma, K_epochs, eps_clip, args, action_std_init=0.6):
         self.action_std = action_std_init
         self.gamma = gamma
         self.eps_clip = eps_clip
         self.K_epochs = K_epochs
         
-        self.buffer = RolloutBuffer()
+        self.buffer = RolloutBuffer(max_buffer_size=args.update_timestep, state_dim=state_dim, action_dim=action_dim)
 
         self.policy = ActorCritic(state_dim, action_dim, action_std_init).to(device)
         self.optimizer = torch.optim.Adam([
@@ -134,12 +149,7 @@ class PPO:
             state = torch.FloatTensor(state).to(device)
             action, action_logprob, state_val = self.policy_old.act(state)
 
-        self.buffer.states.append(state)
-        self.buffer.actions.append(action)
-        self.buffer.logprobs.append(action_logprob)
-        self.buffer.state_values.append(state_val)
-
-        return action.detach().cpu().numpy().flatten()
+        return action, action_logprob, state_val
     
     def select_action_eval(self, state):
         with torch.no_grad():
@@ -149,24 +159,26 @@ class PPO:
         return action.detach().cpu().numpy().flatten()
 
     def update(self):
+        reward = torch.squeeze(self.buffer.reward).to(self.device)
+        is_terminal = torch.squeeze(self.buffer.is_terminal).to(self.device)
         # Monte Carlo estimate of returns
-        rewards = []
+        rewards = torch.zeros_like(reward).to(self.device)
         discounted_reward = 0
-        for reward, is_terminal in zip(reversed(self.buffer.rewards), reversed(self.buffer.is_terminals)):
-            if is_terminal:
+
+        for t in reversed(range(len(reward))):
+            if is_terminal[t]:
                 discounted_reward = 0
-            discounted_reward = reward + (self.gamma * discounted_reward)
-            rewards.insert(0, discounted_reward)
-            
+            discounted_reward = reward[t] + (self.gamma * discounted_reward)
+            rewards[t] = discounted_reward
+
         # Normalizing the rewards
-        rewards = torch.tensor(rewards, dtype=torch.float32).to(device)
         rewards = (rewards - rewards.mean()) / (rewards.std() + 1e-7)
 
         # convert list to tensor
-        old_states = torch.squeeze(torch.stack(self.buffer.states, dim=0)).detach().to(device)
-        old_actions = torch.squeeze(torch.stack(self.buffer.actions, dim=0)).detach().to(device)
-        old_logprobs = torch.squeeze(torch.stack(self.buffer.logprobs, dim=0)).detach().to(device)
-        old_state_values = torch.squeeze(torch.stack(self.buffer.state_values, dim=0)).detach().to(device)
+        old_states = torch.squeeze(self.buffer.state).detach().to(device)
+        old_actions = torch.squeeze(self.buffer.action).detach().to(device)
+        old_logprobs = torch.squeeze(self.buffer.logprob).detach().to(device)
+        old_state_values = torch.squeeze(self.buffer.state_value).detach().to(device)
 
         # calculate advantages
         advantages = rewards.detach() - old_state_values.detach()

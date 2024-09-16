@@ -10,27 +10,52 @@ def make_env(env_name: str):
     env = EpisodeMonitor(env)
     return env
 
-def get_dataset(env_name: str,
+def get_dataset(env,
+                env_name: str,
                 clip_to_eps: bool = True,
                 eps: float = 1e-5,):
-    save_dir = "/projects/bdaw/kaiyan289/IntentDICE/d4rl_datasets"
-    save_path = os.path.join(save_dir, f"{env_name}.npz")
+    # save_dir = "/home/kaiyan3/siqi/IntentDICE/d4rl_datasets"
+    # save_path = os.path.join(save_dir, f"{env_name}.npz")
+    # if 'maze' in env_name:
+    #     save_path = "/home/kaiyan3/siqi/IntentDICE/d4rl_datasets/maze2d_expert_dataset.npz"
+    # print(f"Loading dataset for path: {save_path}")
+    # if not os.path.exists(save_path):
+    #     raise FileNotFoundError(f"Dataset file not found for task: {save_path}")
+    # data = np.load(save_path, allow_pickle=True)
+    # dataset = {
+    #     'observations': data['observations'],
+    #     'actions': data['actions'],
+    #     'rewards': data['rewards'],
+    #     'terminals': data['terminals'],
+    #     'next_observations': data['next_observations'] if 'next_observations' in data else None
+    # }
+    dataset = d4rl.qlearning_dataset(env)
     if 'maze' in env_name:
-        save_path = "/projects/bdaw/kaiyan289/IntentDICE/d4rl_datasets/maze2d_expert_dataset.npz"
-    print(f"Loading dataset for path: {save_path}")
-    if not os.path.exists(save_path):
-        raise FileNotFoundError(f"Dataset file not found for task: {save_path}")
-    data = np.load(save_path)
-    dataset = {
-        'observations': data['observations'],
-        'actions': data['actions'],
-        'rewards': data['rewards'],
-        'terminals': data['terminals'],
-        'next_observations': data['next_observations'] if 'next_observations' in data else None
-    }
+        print("Loading maze dataset")
+        dataset = np.load("/home/kaiyan3/siqi/IntentDICE/d4rl_datasets/maze2d_expert_dataset.npz", allow_pickle=True)
+        dataset = {
+            'observations': dataset['observations'],
+            'actions': dataset['actions'],
+            'rewards': dataset['rewards'],
+            'terminals': dataset['terminals'],
+            'next_observations': dataset['next_observations'] 
+        }
+    else:
+        dataset = d4rl.qlearning_dataset(env)
+    print(dataset['observations'].shape)
+    print(dataset['next_observations'].shape)
 
-    if not 'actions' in dataset:
-        return dataset
+    import matplotlib.pyplot as plt
+    x = dataset['observations'][:1000][:,0]
+    y = dataset['observations'][:1000][:,1]
+    plt.scatter(x, y, c='blue', marker='o')
+
+    plt.title("Expert States Plot (from PyTorch Tensor)")
+    plt.xlabel("X Coordinate")
+    plt.ylabel("Y Coordinate")
+    plt.savefig(f'visual/data_points')  # Add time_step to the filename
+    plt.close()
+ 
     if clip_to_eps:
         lim = 1 - eps
         dataset['actions'] = np.clip(dataset['actions'], -lim, lim)

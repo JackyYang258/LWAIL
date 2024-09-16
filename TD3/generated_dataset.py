@@ -32,27 +32,51 @@ def eval_policy(policy, env_name, seed, eval_episodes=10):
 	print("---------------------------------------")
 	return avg_reward
 
-class FullyConnectedNet(nn.Module):
-    def __init__(self, input_dim: int, hidden_dims, activation=nn.ReLU, activate_final=False):
-        super(FullyConnectedNet, self).__init__()
-        layers = []
-        current_dim = input_dim  # Since we will concatenate two inputs
-        for dim in hidden_dims:
-            layers.append(nn.Linear(current_dim, dim))
-            layers.append(activation())
-            current_dim = dim
-        layers.append(nn.Linear(current_dim, 1))  # Output dimension is 1
-        if activate_final:
-            layers.append(activation())
-        self.net = nn.Sequential(*layers)
+def generate_expert_data(policy, env_name, seed, max_data_size=10000):
+    eval_env = gym.make(env_name)
+    eval_env.seed(seed)
 
-    def forward(self, x1, x2 = None):
-        # Concatenate the inputs along the feature dimension
-        if x2 is None:
-            x = x1
-        else:
-            x = torch.cat((x1, x2), dim=-1)
-        return self.net(x)
+    observations, actions, next_observations, rewards, terminals = [], [], [], [], []
+    total_data_count = 0
+    total_reward = 0  # 累加奖励
+
+    while total_data_count < max_data_size:
+        state, done = eval_env.reset(), False
+        episode_reward = 0  # 跟踪每个 episode 的奖励
+        while not done and total_data_count < max_data_size:
+            action = policy.select_action(np.array(state))
+            next_state, reward, done, _ = eval_env.step(action)
+
+            # 存储当前的状态、动作、奖励和下一个状态
+            observations.append(state)
+            actions.append(action)
+            rewards.append(reward)
+            next_observations.append(next_state)
+            terminals.append(float(done))  # 转换为 float 0 或 1
+
+            state = next_state
+            episode_reward += reward  # 增加本轮奖励
+            total_data_count += 1
+
+            if total_data_count >= max_data_size:
+                break
+
+        total_reward += episode_reward  # 增加总奖励
+
+    avg_reward = total_reward / (total_data_count // eval_env._max_episode_steps)
+    print(f"Collected {total_data_count} samples.")
+    print(f"Average Reward: {avg_reward:.3f}")
+    
+    # 转换为 numpy 数组
+    dataset = {
+        'observations': np.array(observations),
+        'actions': np.array(actions),
+        'next_observations': np.array(next_observations),
+        'rewards': np.array(rewards),
+        'terminals': np.array(terminals),
+    }
+    
+    return dataset, avg_reward
 
 
 if __name__ == "__main__":
@@ -63,7 +87,7 @@ if __name__ == "__main__":
 	parser.add_argument("--seed", default=0, type=int)              # Sets Gym, PyTorch and Numpy seeds
 	parser.add_argument("--start_timesteps", default=25e3, type=int)# Time steps initial random policy is used
 	parser.add_argument("--eval_freq", default=5e3, type=int)       # How often (time steps) we evaluate
-	parser.add_argument("--max_timesteps", default=5e5, type=int)   # Max time steps to run environment
+	parser.add_argument("--max_timesteps", default=6e4, type=int)   # Max time steps to run environment
 	parser.add_argument("--expl_noise", default=0.1, type=float)    # Std of Gaussian exploration noise
 	parser.add_argument("--batch_size", default=256, type=int)      # Batch size for both actor and critic
 	parser.add_argument("--discount", default=0.99, type=float)     # Discount factor
@@ -118,62 +142,19 @@ if __name__ == "__main__":
 	elif args.policy == "DDPG":
 		policy = DDPG.DDPG(**kwargs)
 
-	if args.load_model != "":
-		policy_file = file_name if args.load_model == "default" else args.load_model
-		policy.load(f"./models/{policy_file}")
-
-	replay_buffer = utils.ReplayBuffer(state_dim, action_dim)
- 
-	device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-	evaluations = [eval_policy(policy, args.env, args.seed)]
-
-	state, done = env.reset(), False
-	print("state:", state)
-	episode_reward = 0
-	episode_timesteps = 0
-	episode_num = 0
-
-	for t in range(int(args.max_timesteps)):
-		
-		episode_timesteps += 1
-
-		# Select action randomly or according to policy
-		if t < args.start_timesteps:
-			action = env.action_space.sample()
-		else:
-			action = (
-				policy.select_action(np.array(state))
-				+ np.random.normal(0, max_action * args.expl_noise, size=action_dim)
-			).clip(-max_action, max_action)
-
-		# Perform action
-		next_state, reward, done, _ = env.step(action)
-		done_bool = float(done) if episode_timesteps < env._max_episode_steps else 0
-
-		# Store data in replay buffer
-		replay_buffer.add(state, action, next_state, reward, done_bool)
-
-		state = next_state
-		episode_reward += reward
-
-		# Train agent after collecting sufficient data
-		if t >= args.start_timesteps:
-			policy.train(replay_buffer, args.batch_size)
-
-		if done: 
-			# +1 to account for 0 indexing. +0 on ep_timesteps since it will increment +1 even if done=True
-			print(f"Total T: {t+1} Episode Num: {episode_num+1} Episode T: {episode_timesteps} Reward: {episode_reward:.3f}")
-			# Reset environment
-			state, done = env.reset(), False
-			episode_reward = 0
-			episode_timesteps = 0
-			episode_num += 1 
-
-		# Evaluate episode
-		if (t + 1) % args.eval_freq == 0:
-			evaluations.append(eval_policy(policy, args.env, args.seed))
-			np.save(f"./results/{file_name}", evaluations)
-			policy.save(f"./models/{file_name}")
-	eval_policy(policy, args.env, args.seed)
 	policy.load(f"./models/{file_name}")
 	eval_policy(policy, args.env, args.seed)
+	dataset, avg_reward = generate_expert_data(policy, args.env, args.seed, max_data_size=1000000)
+ #save dataset
+ 
+	import matplotlib.pyplot as plt
+	x = dataset['observations'][:1000][:,0]
+	y = dataset['observations'][:1000][:,1]
+	print(x)
+	plt.scatter(x, y, c='blue', marker='o')
+
+	plt.title("Expert States Plot (from PyTorch Tensor)")
+	plt.xlabel("X Coordinate")
+	plt.ylabel("Y Coordinate")
+	plt.savefig(f'visual/points')  # Add time_step to the filename
+	plt.close()
