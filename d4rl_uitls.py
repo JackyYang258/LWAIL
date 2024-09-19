@@ -29,7 +29,6 @@ def get_dataset(env,
     #     'terminals': data['terminals'],
     #     'next_observations': data['next_observations'] if 'next_observations' in data else None
     # }
-    dataset = d4rl.qlearning_dataset(env)
     if 'maze' in env_name:
         print("Loading maze dataset")
         dataset = np.load("/home/kaiyan3/siqi/IntentDICE/d4rl_datasets/maze2d_expert_dataset.npz", allow_pickle=True)

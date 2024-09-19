@@ -29,8 +29,6 @@ def main(args):
     print_args(args)
     if args.using_icvf:
         print("Using ICVF")
-    if args.only_state:
-        print("Only state")
     if args.update_everystep:
         print("Update every step")
     
@@ -55,7 +53,7 @@ if __name__ == '__main__':
 
     parser.add_argument('--icvf_path', type=str, default="/home/kaiyan3/siqi/IntentDICE/modelhopper.pt", help='Path to the ICVF model checkpoint.')
     parser.add_argument('--using_icvf', action='store_true', help='Flag to indicate whether to use ICVF.')
-    parser.add_argument('--only_state', action='store_true', help='Flag to indicate whether to use only state.')
+    parser.add_argument('--state_action', action='store_true', help='Flag to indicate whether to use only state.')
     parser.add_argument('--update_everystep', action='store_true', help='Flag to update at every step.')
 
     

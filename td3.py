@@ -5,10 +5,9 @@ import torch.nn.functional as F
 import wandb
 import numpy as np
 
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         
 class ReplayBuffer(object):
-    def __init__(self, state_dim, action_dim, max_size=int(1e6)):
+    def __init__(self, state_dim, action_dim, device, max_size=int(1e6)):
         self.max_size = max_size
         self.ptr = 0
         self.size = 0
@@ -19,7 +18,7 @@ class ReplayBuffer(object):
         self.reward = np.zeros((max_size, 1))
         self.not_done = np.zeros((max_size, 1))
 
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.device = device
 
 
     def add(self, state, action, next_state, reward, done):
@@ -105,7 +104,7 @@ class TD3:
         action_dim,
         lr_actor,
         lr_critic,
-        K_epochs,
+        device,
         max_action = 1,
         discount = 0.99,
         tau=0.005,
@@ -113,11 +112,13 @@ class TD3:
         noise_clip=0.5,
         policy_freq=2
     ):
-        self.actor = Actor(state_dim, action_dim, 1).to(device)
+        
+        self.device = device
+        self.actor = Actor(state_dim, action_dim, 1).to(self.device)
         self.actor_target = copy.deepcopy(self.actor)
         self.actor_optimizer = torch.optim.Adam(self.actor.parameters(), lr=lr_actor)
 
-        self.critic = Critic(state_dim, action_dim).to(device)
+        self.critic = Critic(state_dim, action_dim).to(self.device)
         self.critic_target = copy.deepcopy(self.critic)
         self.critic_optimizer = torch.optim.Adam(self.critic.parameters(), lr=lr_critic)
 
@@ -127,24 +128,19 @@ class TD3:
         self.policy_noise = policy_noise
         self.noise_clip = noise_clip
         self.policy_freq = policy_freq
-        self.K_epochs = K_epochs
         self.action_dim = action_dim
 
         self.total_it = 0
-        self.buffer = ReplayBuffer(state_dim, action_dim)
-        self.device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+        
+        self.buffer = ReplayBuffer(state_dim, action_dim, self.device)
 
 
     def select_action(self, state):
-        state = torch.FloatTensor(state.reshape(1, -1)).to(device)
+        state = torch.FloatTensor(state.reshape(1, -1)).to(self.device)
         return self.actor(state).cpu().data.numpy().flatten()
     
     def select_action_withrandom(self, state):
         return self.select_action(state) + np.random.normal(0, self.max_action * 0.1, size=self.action_dim).clip(-self.max_action, self.max_action)
-
-    def update(self, batch_size=256):
-        for i in range(self.K_epochs):
-            self.train(batch_size)
 
     def train(self, batch_size = 256):
         self.total_it += 1
