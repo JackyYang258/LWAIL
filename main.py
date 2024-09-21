@@ -85,13 +85,4 @@ if __name__ == '__main__':
     
     parser.add_argument('--gamma', type=float, default=0.99, help='Discount factor for rewards.')
     parser.add_argument('--eps_clip', type=float, default=0.2, help='Clip parameter for PPO.')
-    parser.add_argument('--action_std', type=float, default=0.6,
-                        help='Starting std for action distribution (Multivariate Normal)')
-    parser.add_argument('--action_std_decay_rate', type=float, default=0.05,
-                        help='Linearly decay action_std (action_std = action_std - action_std_decay_rate)')
-    parser.add_argument('--min_action_std', type=float, default=0.1,
-                        help='Minimum action_std (stop decay after action_std <= min_action_std)')
-    parser.add_argument('--action_std_decay_freq', type=int, default=int(2.5e5),
-                        help='Action_std decay frequency (in num timesteps)')
-    parser
     main(parser.parse_args())

@@ -21,7 +21,7 @@ class Agent:
         # Basic information
         self.args = args
         self.gail = False
-        self.device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+        self.device = torch.device('cuda:1' if torch.cuda.is_available() else 'cpu')
         self.using_icvf = args.using_icvf
         self.state_action = args.state_action
         self.expert_sample = True
@@ -49,7 +49,6 @@ class Agent:
         self.hidden_dims = list(map(int, args.hidden_dim.split(',')))
         torch.set_default_dtype(torch.float32)
         self.filename = "f_net.pth"
-        self.f_net_name = "pretrain_f_net_pre.pth"
         os.makedirs('./log', exist_ok=True)
 
         # Variable for record
@@ -93,13 +92,11 @@ class Agent:
 
     def train(self):
         self.generate_exp_heat()
-        if not self.gail:
-            self.pretrain()
+        self.pretrain()
         # self.plot_reward()
         while self.time_step <= self.args.max_training_timesteps:
-            state = self.env.reset()
-            current_ep_reward = 0 # reward for the current episode
-
+            state = self.env.reset(seed=self.time_step+self.args.seed)
+            current_ep_reward = 0
             for _ in range(1, self.args.max_ep_len + 1):
                 # if self.time_step < self.args.start_timesteps:
                 #     action = self.env.action_space.sample()
@@ -190,7 +187,6 @@ class Agent:
                         if self.args.using_icvf:
                             state_tensor = self.phi_net(state_tensor)
                             next_state_tensor = self.phi_net(next_state_tensor)
-
                         fake_reward = -self.f_net(state_tensor, next_state_tensor)
                         fake_reward = torch.sigmoid(fake_reward).detach().cpu().item()
                         if self.time_step % 2000 == 0:
@@ -512,7 +508,7 @@ class Agent:
                 random_batch = torch.cat((random_states, random_next_states), dim=-1)
                 expert_batch = torch.cat((self.expert_states, self.expert_next_states), dim=-1)
             
-            loss_f = torch.mean(self.f_net(expert_batch)) - torch.mean(self.f_net(random_batch))
+            loss_f = torch.mean(torch.tanh(self.f_net(expert_batch))) - torch.mean(torch.tanh(self.f_net(random_batch)))
             gradient_penalty_f = gradient_penalty(self.f_net, 
                                                   expert_batch,
                                                   random_batch, l=self.args.alpha)
@@ -534,7 +530,8 @@ class Agent:
 
     def save_fnet(self):
         os.makedirs('model', exist_ok=True)
-        path = os.path.join('model', self.f_net_name)
+        env_firstname = self.args.env_name.split('-')[0]
+        path = os.path.join('model', env_firstname + 'pref.pt')
         torch.save(self.f_net.state_dict(), path)
         print(f"Model saved to {path}")
 
@@ -542,7 +539,7 @@ class Agent:
         
         time_step = 0
         while True:
-            state = self.env.reset()
+            state = self.env.reset(seed=(time_step + self.args.seed))
 
             for _ in range(1, self.args.max_ep_len + 1):
                 if self.time_step < self.args.start_timesteps:
