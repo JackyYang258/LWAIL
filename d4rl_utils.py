@@ -72,6 +72,10 @@ def get_dataset(env,
     dones_float[-1] = 1
 
     dataset['dones_float'] = dones_float
+
+    # Print the locations where dones_float is equal to 1
+    done_indices = np.where(dones_float == 1)[0]
+    print(f"Locations where dones_float is 1: {done_indices}")
     
     return dataset
 

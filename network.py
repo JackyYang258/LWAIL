@@ -24,11 +24,10 @@ class FullyConnectedNet(nn.Module):
         return self.net(x)
     
 class Discriminator(nn.Module):
-    def __init__(self, args):
+    def __init__(self, state_dim, action_dim):
         super(Discriminator, self).__init__()
-        self.args = args
         self.model = nn.Sequential(
-            nn.Linear(self.args.state_dim + self.args.num_actions, 64),
+            nn.Linear(state_dim + action_dim, 64),
             nn.Tanh(),
             nn.Linear(64, 64),
             nn.Tanh(),
