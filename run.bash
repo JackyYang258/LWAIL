@@ -6,6 +6,5 @@ python main.py \
 --downstream 'td3' \
 --one_episode \
 --seed 0 \
---using_icvf \
---wandb_name antone_icvf_td3_log_ss
-# --wandb_name hop_icvf_ppopre15_sigmoid_ss_full
+--using_icvf
+--wandb_name walone_noicvf_td3_log_sa
