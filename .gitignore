@@ -5,6 +5,7 @@ wandb/
 TD3/models/
 model/
 visual/
+visualicvf/
 *.swp
 # Byte-compiled / optimized / DLL files
 **__pycache__/

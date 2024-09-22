@@ -98,40 +98,13 @@ class Agent:
     def train(self):
         self.generate_exp_heat()
         self.pretrain()
-        return
         # self.plot_reward()
         while self.time_step <= self.args.max_training_timesteps:
             state = self.env.reset(seed=self.time_step+self.args.seed)
             current_ep_reward = 0
             for _ in range(1, self.args.max_ep_len + 1):
-                # if self.time_step < self.args.start_timesteps:
-                #     action = self.env.action_space.sample()
-                # else:
-                #     action = self.agent.select_action_withrandom(np.array(state))
-                if self.state_action:
-                    # if self.agent_kind == 'ppo':
-                    #     action_t, action_logprob, state_val = self.agent.select_action(state)
-                    #     action = action_t.detach().cpu().numpy().flatten()
-                        
-                    #     next_state_array, reward, done, _ = self.env.step(action)
-                        
-                    #     state = torch.FloatTensor(state).to(self.device)
-                    #     next_state = torch.FloatTensor(next_state_array).to(self.device)
-                    #     action_t = torch.FloatTensor(action).to(self.device)
-                    #     if self.time_step > -1:
-                    #         fake_reward = -self.f_net(state, action_t)
-                    #         fake_reward = torch.sigmoid(fake_reward).detach().cpu().item()
-                    #         if self.time_step % 200 == 0:
-                    #             print("fake_reward and reward:", fake_reward, reward)
-                    #     else:
-                    #         fake_reward = reward
-                        
-                    #     self.agent.buffer.store(state, action_t, action_logprob, state_val, next_state, fake_reward, done)
-                        
-                    #     self.sample_states.append(state)
-                    #     self.sample_actions.append(action_t)
-                    #     self.sample_next_states.append(next_state)
-                    #     state = next_state_array
+                print(self.agent_kind)
+                if self.agent_kind == 'td3':
                     if self.time_step < self.args.start_timesteps:
                         action = self.env.action_space.sample()
                     else:
@@ -140,62 +113,20 @@ class Agent:
                     if self.time_step > -1:
                         state_tensor = torch.FloatTensor(state).to(self.device)
                         next_state_tensor = torch.FloatTensor(next_state).to(self.device)
-                        action_tensor = torch.FloatTensor(action).to(self.device)
-                        if self.args.using_icvf:
-                            fake_reward = -self.f_net(self.phi_net(state_tensor), action_tensor)
-                        else:
-                            fake_reward = -self.f_net(state_tensor, action_tensor)
-                        fake_reward = torch.sigmoid(fake_reward).detach().cpu().item()
-                        if self.time_step % 200 == 0:
-                            print("fake_reward and reward:", fake_reward, reward)
-                        
-                    self.agent.buffer.add(state, action, next_state, fake_reward, float(done))
-                    self.sample_states.append(state_tensor)
-                    self.sample_actions.append(action_tensor)
-                    self.sample_next_states.append(next_state_tensor)
-                    state = next_state
-                # elif self.agent_kind == 'ppo':
-                #     action_t, action_logprob, state_val = self.agent.select_action(state)
-                #     action = action_t.detach().cpu().numpy().flatten()
-                    
-                #     next_state_array, reward, done, _ = self.env.step(action)
-                    
-                #     state = torch.FloatTensor(state).to(self.device)
-                #     next_state = torch.FloatTensor(next_state_array).to(self.device)
-                #     if self.time_step > -1:
-                #         if self.args.using_icvf:
-                #             state_cal = self.phi_net(state)
-                #             next_state_cal = self.phi_net(next_state)
-                #         else:
-                #             state_cal = state
-                #             next_state_cal = next_state
-                #         fake_reward = -self.f_net(state_cal, next_state_cal)
-                #         fake_reward = torch.sigmoid(fake_reward).detach().cpu().item()
-                #         if self.time_step % 2000 == 0:
-                #             print("fake_reward and reward:", fake_reward, reward)
-                #     else:
-                #         fake_reward = reward
-                    
-                #     self.agent.buffer.store(state, action_t, action_logprob, state_val, next_state, fake_reward, done)
-                    
-                #     self.sample_states.append(state)
-                #     self.sample_next_states.append(next_state)
-                #     state = next_state_array
-                elif self.agent_kind == 'td3':
-                    if self.time_step < self.args.start_timesteps:
-                        action = self.env.action_space.sample()
-                    else:
-                        action = self.agent.select_action_withrandom(state)
-                    next_state, reward, done, _ = self.env.step(action)
-                    if self.time_step > -1:
-                        state_tensor = torch.FloatTensor(state).to(self.device)
-                        next_state_tensor = torch.FloatTensor(next_state).to(self.device)
+                        if self.state_action:
+                            action_tensor = torch.FloatTensor(action).to(self.device)
+                            self.sample_actions.append(action_tensor)
                         self.sample_states.append(state_tensor)
                         self.sample_next_states.append(next_state_tensor)
                         if self.args.using_icvf:
                             state_tensor = self.phi_net(state_tensor)
                             next_state_tensor = self.phi_net(next_state_tensor)
-                        fake_reward = -self.f_net(state_tensor, next_state_tensor)
+                            if self.args.minus:
+                                next_state_tensor = next_state_tensor - state_tensor
+                        if self.state_action:
+                            fake_reward = -self.f_net(state_tensor, action_tensor)
+                        else:
+                            fake_reward = -self.f_net(state_tensor, next_state_tensor)
                         fake_reward = torch.sigmoid(fake_reward).detach().cpu().item()
                         if self.time_step % 2000 == 0:
                             print("fake_reward and reward:", fake_reward, reward)
@@ -245,6 +176,8 @@ class Agent:
         if self.args.using_icvf:
             buffer_state = self.phi_net(buffer_state)
             buffer_next_state = self.phi_net(buffer_next_state)
+            if self.args.minus:
+                buffer_next_state = buffer_next_state - buffer_state
 
         # expert_rewards = -self.f_net(buffer_state, buffer_state).view(-1)
         # expert_rewards = torch.sigmoid(expert_rewards)
@@ -303,6 +236,9 @@ class Agent:
             self.expert_next_states = self.phi_net(self.expert_next_states)
             self.sample_states = self.phi_net(self.sample_states)
             self.sample_next_states = self.phi_net(self.sample_next_states)
+            if self.args.minus:
+                self.expert_next_states = self.expert_next_states - self.expert_states
+                self.sample_next_states = self.sample_next_states - self.sample_states
         
         update_step = self.args.f_epoch
         self.f_net.train()

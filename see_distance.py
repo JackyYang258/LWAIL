@@ -8,7 +8,7 @@ import matplotlib.pyplot as plt
 from sklearn.manifold import TSNE
 
 # Assuming you have already defined your device (cpu or cuda)
-device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+device = torch.device('cuda:2' if torch.cuda.is_available() else 'cpu')
 
 # Define the PhiNet class (as you have it)
 class PhiNet(nn.Module):
@@ -30,7 +30,7 @@ phi_net = PhiNet(icvf_hidden_dims)
 print("phi_net:", phi_net)
 
 env_firstname = "hopper"
-icvf_path = "/scratch/bdaw/kaiyan289/IntentDICE/model/" + env_firstname + ".pt"
+icvf_path = "/home/kaiyan3/siqi/IntentDICE/model/" + env_firstname + ".pt"
 phi_net.load_state_dict(torch.load(icvf_path))
 for param in phi_net.parameters():
     param.requires_grad = False
@@ -52,7 +52,7 @@ dones = dataset['terminals']
 
 # Find the end of the trajectory
 print(dones.argmax())
-trajectory_end = 2000
+trajectory_end = 100
 print('Trajectory end:', trajectory_end)
 
 # Select the trajectory
@@ -74,55 +74,62 @@ norm = mcolors.Normalize(vmin=trajectory_rewards.min(), vmax=trajectory_rewards.
 # ================== Visualization Before phi_net (Original Data) ==================
 
 # PCA Visualization (Original)
+# ================== Visualization Before phi_net (Original Data) ==================
+
+# PCA Visualization (Original) - Connect points with lines
 pca = PCA(n_components=2)
-reduced_observations = pca.fit_transform(trajectory_observations)
+# reduced_observations = pca.fit_transform(trajectory_observations)
 
-plt.figure(figsize=(8, 6))
-scatter = plt.scatter(reduced_observations[:, 0], reduced_observations[:, 1], c=norm(trajectory_rewards), cmap='viridis', marker='o')
-plt.title('2D visualization of the original trajectory (PCA) with normalized rewards')
-plt.xlabel('Principal Component 1')
-plt.ylabel('Principal Component 2')
-plt.colorbar(scatter, label='Normalized Reward')
-plt.savefig('visual/original_trajectory_pca_visualization_with_normalized_rewards.png')
-plt.show()
+# plt.figure(figsize=(8, 6))
+# plt.plot(reduced_observations[:, 0], reduced_observations[:, 1], marker='o', linestyle='-', color='b')
+# plt.title('2D visualization of the original trajectory (PCA) - Points connected by lines')
+# plt.xlabel('Principal Component 1')
+# plt.ylabel('Principal Component 2')
+# plt.savefig('visualicvf/original_trajectory_pca_with_lines.png')
+# plt.close()
 
-# t-SNE Visualization (Original)
+# t-SNE Visualization (Original) - Connect points with lines
 tsne = TSNE(n_components=2, perplexity=50, n_iter=300)
-reduced_observations_tsne = tsne.fit_transform(trajectory_observations)
+# reduced_observations_tsne = tsne.fit_transform(trajectory_observations)
 
-plt.figure(figsize=(8, 6))
-scatter = plt.scatter(reduced_observations_tsne[:, 0], reduced_observations_tsne[:, 1], c=norm(trajectory_rewards), cmap='viridis', marker='o')
-plt.title('2D visualization of the original trajectory (t-SNE) with normalized rewards')
-plt.xlabel('t-SNE Component 1')
-plt.ylabel('t-SNE Component 2')
-plt.colorbar(scatter, label='Normalized Reward')
-plt.savefig('visual/original_trajectory_tsne_visualization_with_normalized_rewards.png')
-plt.show()
+# plt.figure(figsize=(8, 6))
+# plt.plot(reduced_observations_tsne[:, 0], reduced_observations_tsne[:, 1], marker='o', linestyle='-', color='b')
+# plt.title('2D visualization of the original trajectory (t-SNE) - Points connected by lines')
+# plt.xlabel('t-SNE Component 1')
+# plt.ylabel('t-SNE Component 2')
+# plt.savefig('visualicvf/original_trajectory_tsne_with_lines.png')
+# plt.close()
 
 
 # ================== Visualization After phi_net (Processed Data) ==================
 
-# PCA Visualization (Processed)
+# PCA Visualization (Processed) - Connect points with lines
+print("processed_observations:", processed_observations)
 reduced_processed_observations = pca.fit_transform(processed_observations)
-
+print("reduced_processed_observations:", reduced_processed_observations)
+print("1")
 plt.figure(figsize=(8, 6))
-scatter = plt.scatter(reduced_processed_observations[:, 0], reduced_processed_observations[:, 1], c=norm(trajectory_rewards), cmap='viridis', marker='o')
-plt.title('2D visualization of the processed trajectory (PCA) with normalized rewards')
+plt.plot(reduced_processed_observations[:, 0], reduced_processed_observations[:, 1], marker='o', linestyle='-', color='b')
+print("2")
+plt.title('2D visualization of the processed trajectory (PCA) - Points connected by lines')
+print("3")
 plt.xlabel('Principal Component 1')
 plt.ylabel('Principal Component 2')
-plt.colorbar(scatter, label='Normalized Reward')
-plt.savefig('visual/processed_trajectory_pca_visualization_with_normalized_rewards.png')
-plt.show()
+print("4")
+plt.savefig('visualicvf/processed_trajectory_pca_with_lines.png')
+print("5")
+plt.close()
+print("6")
 
-# t-SNE Visualization (Processed)
-reduced_processed_observations_tsne = tsne.fit_transform(processed_observations)
+# t-SNE Visualization (Processed) - Connect points with lines
+# reduced_processed_observations_tsne = tsne.fit_transform(processed_observations)
 
-plt.figure(figsize=(8, 6))
-scatter = plt.scatter(reduced_processed_observations_tsne[:, 0], reduced_processed_observations_tsne[:, 1], c=norm(trajectory_rewards), cmap='viridis', marker='o')
-plt.title('2D visualization of the processed trajectory (t-SNE) with normalized rewards')
-plt.xlabel('t-SNE Component 1')
-plt.ylabel('t-SNE Component 2')
-plt.colorbar(scatter, label='Normalized Reward')
-plt.savefig('visual/processed_trajectory_tsne_visualization_with_normalized_rewards.png')
-plt.show()
+# plt.figure(figsize=(8, 6))
+# plt.plot(reduced_processed_observations_tsne[:, 0], reduced_processed_observations_tsne[:, 1], marker='o', linestyle='-', color='b')
+# plt.title('2D visualization of the processed trajectory (t-SNE) - Points connected by lines')
+# plt.xlabel('t-SNE Component 1')
+# plt.ylabel('t-SNE Component 2')
+# plt.savefig('visualicvf/processed_trajectory_tsne_with_lines.png')
+# plt.close()
+
 

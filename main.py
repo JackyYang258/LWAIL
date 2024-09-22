@@ -64,7 +64,7 @@ if __name__ == '__main__':
     parser.add_argument('--state_action', action='store_true', help='Flag to indicate whether to use only state.')
     parser.add_argument('--update_everystep', action='store_true', help='Flag to update at every step.')
     parser.add_argument('--one_episode', action='store_true', help='Flag to update at every step.')
-
+    parser.add_argument('--minus', action='store_true', help='Flag to update at every step.')
     
     # Important Training arguments
     parser.add_argument('--max_training_timesteps', type=int, default=2000000, help='Maximum number of timesteps for training.')
