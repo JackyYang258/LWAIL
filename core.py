@@ -14,7 +14,6 @@ import gym
 from datetime import datetime
 import wandb
 import numpy as np
-import time
 
 class Agent:
     def __init__(self, state_dim, action_dim, env, expert_buffer, args):
@@ -103,7 +102,6 @@ class Agent:
             state = self.env.reset(seed=self.time_step+self.args.seed)
             current_ep_reward = 0
             for _ in range(1, self.args.max_ep_len + 1):
-                print(self.agent_kind)
                 if self.agent_kind == 'td3':
                     if self.time_step < self.args.start_timesteps:
                         action = self.env.action_space.sample()
@@ -486,10 +484,7 @@ class Agent:
             state = self.env.reset(seed=(time_step + self.args.seed))
 
             for _ in range(1, self.args.max_ep_len + 1):
-                if self.time_step < self.args.start_timesteps:
-                    action = self.env.action_space.sample()
-                else:
-                    action = self.agent.select_action_withrandom(np.array(state))
+                action = self.env.action_space.sample()
                 next_state, reward, done, _ = self.env.step(action)
                 state = next_state
                 time_step += 1

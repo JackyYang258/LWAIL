@@ -34,7 +34,7 @@ def save_first_episode(env_name, save_dir):
     print(f"Saved first episode of {env_name} to {save_path}")
 
 # List of environment names (Example)
-env_names = ["hopper-expert-v2", "walker2d-expert-v2", "halfcheetah-expert-v2", "ant-expert-v2", "maze2d-open-dense-v0"]
+env_names = ["hopper-random-v2"]
 
 # Directory to save trajectories
 save_dir = "one_expert_trajectory"

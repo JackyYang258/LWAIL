@@ -1,6 +1,6 @@
 python main.py \
---env_name ant-expert-v2 \
---f_epoch 40 \
+--env_name halfcheetah-expert-v2 \
+--f_epoch 30 \
 --max_training_timesteps 1500000 \
 --update_timestep 4000 \
 --downstream 'td3' \
@@ -8,4 +8,4 @@ python main.py \
 --seed 0 \
 --using_icvf \
 --minus \
---wandb_name antone_icvf_sms
+--wandb_name che_icvf_sms
