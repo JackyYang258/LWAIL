@@ -18,7 +18,7 @@ class Agent:
     def __init__(self, state_dim, action_dim, env, expert_buffer, args):
         # Basic information
         self.args = args
-        self.device = torch.device('cuda:6' if torch.cuda.is_available() else 'cpu')
+        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         self.using_icvf = args.using_icvf
         self.state_action = args.state_action
         self.expert_sample = True
@@ -88,7 +88,8 @@ class Agent:
         self.pretrain()
         # self.plot_reward()
         while self.time_step <= self.args.max_training_timesteps:
-            state = self.env.reset(seed=self.time_step+self.args.seed)
+            # state = self.env.reset(seed=self.time_step+self.args.seed)
+            state = self.env.reset()
             current_ep_reward = 0
             for _ in range(1, self.args.max_ep_len + 1):
                 if self.agent_kind == 'td3':
@@ -336,7 +337,8 @@ class Agent:
         avg_episode_length = 0.0
 
         for ep in range(eval_episodes):
-            state = env.reset(seed = (self.args.seed + ep + self.time_step))
+            # state = env.reset(seed = (self.args.seed + ep + self.time_step))
+            state = env.reset()
             episode_reward = 0.0
             done = False
             episode_length = 0
@@ -424,7 +426,8 @@ class Agent:
         
         time_step = 0
         while True:
-            state = self.env.reset(seed=(time_step + self.args.seed))
+            # state = self.env.reset(seed=(time_step + self.args.seed))
+            state = self.env.reset()
 
             for _ in range(1, self.args.max_ep_len + 1):
                 action = self.env.action_space.sample()
