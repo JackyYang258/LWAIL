@@ -42,7 +42,8 @@ def main(args):
     
     time()
     
-    wandb.init(project='intentDICE', entity="team_siqi", config=args, name=args.wandb_name, mode='online')
+    wandb_name = args.env_name.split('-')[0] + "_seed" + str(args.seed)
+    wandb.init(project='intentDICE', entity="team_siqi", config=args, name=wandb_name, mode='online')
     agent = Agent(state_dim, action_dim, env, expert_dataset, args)
     print("======== start training ==========")
     agent.train()

@@ -2,7 +2,6 @@ import torch
 from tqdm import tqdm
 
 from network import network_weight_matrices, FullyConnectedNet, PhiNet, Discriminator
-from ppo import PPO
 from td3 import TD3
 from utils import time, gradient_penalty, get_normalized_score
 from sklearn.decomposition import PCA
@@ -19,7 +18,6 @@ class Agent:
     def __init__(self, state_dim, action_dim, env, expert_buffer, args):
         # Basic information
         self.args = args
-        self.gail = False
         self.device = torch.device('cuda:6' if torch.cuda.is_available() else 'cpu')
         self.using_icvf = args.using_icvf
         self.state_action = args.state_action
@@ -27,10 +25,7 @@ class Agent:
         self.update_everystep = args.update_everystep
         max_action = float(env.action_space.high[0])
         self.agent_kind = args.downstream
-        if self.agent_kind == 'ppo':
-            self.agent = PPO(state_dim, action_dim, self.args.lr_actor, self.args.lr_critic, self.args.gamma, self.args.agent_epoch, self.args.eps_clip, args)
-        if self.agent_kind == 'td3':
-            self.agent = TD3(state_dim, action_dim, self.args.lr_actor, self.args.lr_critic, self.device)
+        self.agent = TD3(state_dim, action_dim, self.args.lr_actor, self.args.lr_critic, self.device)
         self.max_action = float(env.action_space.high[0])
         print("action_space:", env.action_space)
         print(f"max_action: {self.max_action}")
@@ -43,7 +38,6 @@ class Agent:
         self.expert_states_buffer = self.expand_and_fill(self.expert_states_buffer, self.args.update_timestep)
         self.expert_next_states_buffer = self.expand_and_fill(self.expert_next_states_buffer, self.args.update_timestep)
         self.expert_actions_buffer = self.expand_and_fill(self.expert_actions_buffer, self.args.update_timestep)
-        print("expert_states_buffer:", self.expert_states_buffer.shape)
         
         self.hidden_dims = list(map(int, args.hidden_dim.split(',')))
         torch.set_default_dtype(torch.float32)
@@ -76,11 +70,6 @@ class Agent:
             self.phi_net = None
             print('Not using ICVF')
 
-        if self.gail:
-            self.discriminator = Discriminator(state_dim, action_dim).to(self.device)
-            self.d_optimizer = torch.optim.Adam(self.discriminator.parameters(), self.args.lr_f)
-            self.mse_loss = torch.nn.MSELoss()
-            self.bce_loss = torch.nn.BCELoss()
         if self.args.state_action:
             if self.args.using_icvf:
                 self.f_net = FullyConnectedNet(256 + action_dim, self.hidden_dims).to(self.device)
@@ -177,9 +166,6 @@ class Agent:
             if self.args.minus:
                 buffer_next_state = buffer_next_state - buffer_state
 
-        # expert_rewards = -self.f_net(buffer_state, buffer_state).view(-1)
-        # expert_rewards = torch.sigmoid(expert_rewards)
-        # expert_rewards = expert_rewards.detach()
         if self.state_action:
             fake_reward = -self.f_net(buffer_state, buffer_action).view(-1)
         else:
@@ -189,34 +175,7 @@ class Agent:
         fake_reward = fake_reward.detach().cpu().numpy().reshape(-1, 1)
             
         self.agent.buffer.reward = fake_reward
-        
-    # def return_range(self):
-    #     returns, lengths = [], []
-    #     ep_ret, ep_len = 0., 0
-    #     lens = 100000
-    #     terminals = self.dataset['terminals'][:lens]
-    #     if self.using_icvf:
-    #         expert_states = self.phi_net(torch.tensor(self.dataset['observations'][:lens], dtype=torch.float32).float().to(self.device))
-    #         expert_next_states = self.phi_net(torch.tensor(self.dataset['next_observations'][:lens], dtype=torch.float32).float().to(self.device))
-    #     else:
-    #         expert_states = torch.tensor(self.dataset['observations'][:lens], dtype=torch.float32).float().to(self.device)
-    #         expert_next_states = torch.tensor(self.dataset['next_observations'][:lens], dtype=torch.float32).float().to(self.device)
-    #     # if self.only_state:
-    #     #     rewards = -self.f_net(expert_states).detach().cpu().numpy().flatten()
-    
-    #     rewards = -self.f_net(expert_states,expert_next_states).detach().cpu().numpy().flatten()
-    #     for r, d in zip(rewards, terminals):
-    #         ep_ret += float(r)
-    #         ep_len += 1
-    #         if d or ep_len == self.args.max_ep_len:
-    #             returns.append(ep_ret)
-    #             lengths.append(ep_len)
-    #             ep_ret, ep_len = 0., 0
-    #     # returns.append(ep_ret)    # incomplete trajectory
-    #     lengths.append(ep_len)      # but still keep track of number of steps
-    #     assert sum(lengths) == len(rewards)
-    #     wandb.log({"max_return": max(returns), "min_return": min(returns)}, step=self.time_step)
-    #     return min(returns), max(returns)    
+
     def f_update(self):
         self.sample_states = torch.squeeze(torch.stack(self.sample_states, dim=0)).detach().to(self.device)
         self.sample_next_states = torch.squeeze(torch.stack(self.sample_next_states, dim=0)).detach().to(self.device)
@@ -257,7 +216,6 @@ class Agent:
             
             total_loss_f = loss_f + gradient_penalty_f
 
-            # Optimize f_net by minimizing total_loss_f
             self.f_net.zero_grad()
             total_loss_f.backward()
             self.f_optimizer.step()
@@ -341,6 +299,7 @@ class Agent:
         # Save the figure with the timestamp and time in the filename
         plt.savefig(f'visual/heat_rewd_{current_time}_{timestep}.png')
         plt.close()
+
     def generate_exp_heat(self):
         if "maze" not in self.args.env_name or self.state_action or self.gail:
             return
@@ -371,29 +330,13 @@ class Agent:
         plt.savefig(f'visual/exp_heat.png')
         plt.close()
 
-    # def load_model(self):
-    #     """Load the f_net model from the specified filename in the 'model/' directory."""
-    #     path = os.path.join('model', self.filename)
-    #     if os.path.exists(path):
-    #         self.f_net.load_state_dict(torch.load(path))
-    #         print(f"Model loaded from {path}")
-    #     else:
-    #         print(f"No model found at {path}, starting with random weights.")
-
-    # def save_model(self):
-    #     """Save the f_net model to the specified filename in the 'model/' directory."""
-    #     os.makedirs('model', exist_ok=True)
-    #     path = os.path.join('model', self.filename)
-    #     torch.save(self.f_net.state_dict(), path)
-    #     print(f"Model saved to {path}")
-
     def evaluate_policy(self, eval_episodes=10):
         env = gym.make(self.args.env_name)
         avg_reward = 0.0
         avg_episode_length = 0.0
 
         for ep in range(eval_episodes):
-            state = env.reset()
+            state = env.reset(seed = (self.args.seed + ep + self.time_step))
             episode_reward = 0.0
             done = False
             episode_length = 0
@@ -606,5 +549,3 @@ class Agent:
         else:
             expanded_buffer = buffer
         return expanded_buffer
-
-        
