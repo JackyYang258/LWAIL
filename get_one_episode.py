@@ -52,7 +52,7 @@ def save_highest_reward_episode(env_name, save_dir):
     print(f"Saved highest reward episode of {env_name} (reward: {rewards[max_reward_idx]}) to {save_path}")
 
 # List of environment names (Example)
-env_names = ["antmaze-umaze-diverse-v0"]
+env_names = ["antmaze-umaze-diverse-v2"]
 
 # Directory to save trajectories
 save_dir = "one_expert_trajectory"
