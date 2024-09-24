@@ -45,17 +45,17 @@ def save_highest_reward_episode(env_name, save_dir):
     highest_reward_episode = episodes[max_reward_idx]
     
     # Save the episode with the highest reward to a file
-    save_path = os.path.join(save_dir, f"{env_name}_highest_reward_episode.pkl")
+    save_path = os.path.join(save_dir, f"{env_name}.pkl")
     with open(save_path, 'wb') as f:
         pickle.dump(highest_reward_episode, f)
     
     print(f"Saved highest reward episode of {env_name} (reward: {rewards[max_reward_idx]}) to {save_path}")
 
 # List of environment names (Example)
-env_names = ["pen-expert-v1", "hammer-expert-v1", "relocate-expert-v1", "door-expert-v1"]
+env_names = ["antmaze-umaze-diverse-v0"]
 
 # Directory to save trajectories
-save_dir = "highest_reward_expert_trajectory"
+save_dir = "one_expert_trajectory"
 os.makedirs(save_dir, exist_ok=True)
 
 # Loop through environments and save the highest reward episode
