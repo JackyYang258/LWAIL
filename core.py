@@ -247,7 +247,7 @@ class Agent:
         self.sum_episodes_num = 0
     
     def generate_heat(self):
-        if "maze" not in self.args.env_name or self.state_action:
+        if "maze_open" not in self.args.env_name or self.state_action:
             return
         # Define the input range and sampling density
         x_min, x_max = 0, 5
@@ -302,7 +302,7 @@ class Agent:
         plt.close()
 
     def generate_exp_heat(self):
-        if "maze" not in self.args.env_name or self.state_action or self.gail:
+        if "maze" not in self.args.env_name or self.state_action:
             return
         # Define the input range and sampling density
         x_min, x_max = 0, 5
