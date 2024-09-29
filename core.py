@@ -116,10 +116,16 @@ class Agent:
                         else:
                             fake_reward = -self.f_net(state_tensor, next_state_tensor)
                         fake_reward = torch.sigmoid(fake_reward).detach().cpu().item()
-                        if self.time_step % 2000 == 0:
-                            print("fake_reward and reward:", fake_reward, reward)
                         
                     self.agent.buffer.add(state, action, next_state, fake_reward, float(done))
+                    state = next_state
+                elif self.agent_kind == 'onlytd3':
+                    if self.time_step < self.args.start_timesteps:
+                        action = self.env.action_space.sample()
+                    else:
+                        action = self.agent.select_action_withrandom(state)
+                    next_state, reward, done, _ = self.env.step(action)
+                    self.agent.buffer.add(state, action, next_state, reward, float(done))
                     state = next_state
                 
                 self.time_step += 1
@@ -127,16 +133,15 @@ class Agent:
                 # print("time_step:", self.time_step)
                 if self.time_step % self.args.update_timestep == 0:
                     
-                    self.f_update()
-                    
                     if self.agent_kind == 'td3':
+                        self.f_update()
                         self.get_pseudo_rewards()
                         
                     # #self.get_pseudo_rewards() # Update the buffer with pseudo rewards
                     # if self.agent_kind == 'ppo':
                     #     self.agent.update() # Update the agent with the pseudo rewards
 
-                if self.agent_kind == 'td3' and self.time_step > self.args.update_timestep:
+                if self.time_step > self.args.update_timestep:
                     self.agent.train()
                     
                 if self.time_step % self.args.eval_freq == 0:
@@ -344,11 +349,7 @@ class Agent:
             episode_length = 0
 
             while not done:
-                if self.agent_kind == 'ppo':
-                    action, _, _ = self.agent.select_action(state)
-                    action = action.detach().cpu().numpy().flatten()
-                elif self.agent_kind == 'td3':
-                    action = self.agent.select_action(state)
+                action = self.agent.select_action(state)
 
                 next_state, reward, done, _ = env.step(action)
                 episode_reward += reward
