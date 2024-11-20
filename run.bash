@@ -1,11 +1,12 @@
 python main.py \
---env_name halfcheetah-expert-v2 \
+--env_name ant-expert-v2 \
 --f_epoch 30 \
---max_training_timesteps 1500000 \
+--max_training_timesteps 1000000 \
 --update_timestep 4000 \
 --downstream 'td3' \
---one_episode \
---seed 0 \
+--expert_episode one \
 --using_icvf \
+--curl \
 --minus \
---wandb_name che_icvf_sms
+--seed 0 \
+--wandb_name curl

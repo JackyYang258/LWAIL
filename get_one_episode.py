@@ -4,7 +4,7 @@ import gym
 from d4rl_utils import get_dataset
 import pickle  # To store trajectories
 
-def save_highest_reward_episode(env_name, save_dir):
+def save_top_rewards_episodes(env_name, save_dir, top_k=10, skip=10):
     # Create environment
     env = gym.make(env_name)
 
@@ -14,12 +14,12 @@ def save_highest_reward_episode(env_name, save_dir):
     # Get the indices where episode ends (dones_float == 1)
     done_indices = np.where(dataset['dones_float'] == 1)[0]
 
-    if len(done_indices) == 0:
-        print(f"No complete episodes in {env_name}. Skipping...")
+    if len(done_indices) < 20:
+        print(f"Less than 20 complete episodes in {env_name}. Skipping...")
         return
     
-    # Get the first 10 episodes
-    num_episodes = min(10, len(done_indices))
+    # Get the first 20 episodes
+    num_episodes = min(20, len(done_indices))
     episodes = []
     rewards = []
 
@@ -30,34 +30,47 @@ def save_highest_reward_episode(env_name, save_dir):
         episode_reward_sum = np.sum(episode_trajectory['rewards'])
         
         # Store the trajectory and corresponding reward
-        episodes.append(episode_trajectory)
-        rewards.append(episode_reward_sum)
+        episodes.append((episode_trajectory, episode_reward_sum))
         
         # Update the start index for the next episode
         start_idx = end_idx
 
-    # Print the rewards of the first 10 episodes
-    for i, reward_sum in enumerate(rewards):
-        print(f"Sum of rewards for episode {i + 1} of {env_name}: {reward_sum}")
+    # Sort episodes by reward in descending order
+    episodes.sort(key=lambda x: x[1], reverse=True)
 
-    # Find the episode with the highest reward
-    max_reward_idx = np.argmax(rewards)
-    highest_reward_episode = episodes[max_reward_idx]
-    
-    # Save the episode with the highest reward to a file
+    # Get the top k episodes with the highest rewards
+    top_episodes = episodes[:top_k]
+
+    for i, (episode_trajectory, reward_sum) in enumerate(top_episodes):
+        print(f"Sum of rewards for top {i+1} episode of {env_name}: {reward_sum}")
+    # Combine the top k episodes into one complete episode
+    combined_episode = {}
+    for key in dataset.keys():
+        # Initialize the combined episode with empty arrays
+        combined_episode[key] = np.empty((0,) + dataset[key].shape[1:], dtype=dataset[key].dtype)
+        for episode in top_episodes:
+            # Append every skip-th element to the combined episode
+            combined_episode[key] = np.append(combined_episode[key], episode[0][key][::skip], axis=0)
+
+    # Save the combined episode to a single file
     save_path = os.path.join(save_dir, f"{env_name}.pkl")
     with open(save_path, 'wb') as f:
-        pickle.dump(highest_reward_episode, f)
+        pickle.dump(combined_episode, f)
     
-    print(f"Saved highest reward episode of {env_name} (reward: {rewards[max_reward_idx]}) to {save_path}")
+    # Print the combined episode dictionary
+    print("Combined episode dictionary:")
+    for key, value in combined_episode.items():
+        print(f"{key}: {value.shape}...")  # Print shape and first few elements
+
+    print(f"Saved combined top {top_k} reward episodes of {env_name} to {save_path}")
 
 # List of environment names (Example)
-env_names = ["antmaze-umaze-diverse-v2"]
+env_names = ["hopper-expert-v2", "halfcheetah-expert-v2", "walker2d-expert-v2", "ant-expert-v2"]
 
 # Directory to save trajectories
-save_dir = "one_expert_trajectory"
+save_dir = "uncomplete_expert_trajectory"
 os.makedirs(save_dir, exist_ok=True)
 
-# Loop through environments and save the highest reward episode
+# Loop through environments and save the top k reward episodes
 for env_name in env_names:
-    save_highest_reward_episode(env_name, save_dir)
+    save_top_rewards_episodes(env_name, save_dir)

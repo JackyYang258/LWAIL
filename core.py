@@ -1,7 +1,7 @@
 import torch
 from tqdm import tqdm
 
-from network import network_weight_matrices, FullyConnectedNet, PhiNet, Discriminator
+from network import FullyConnectedNet, PhiNet
 from td3 import TD3
 from utils import time, gradient_penalty, get_normalized_score
 from sklearn.decomposition import PCA
@@ -18,14 +18,14 @@ class Agent:
     def __init__(self, state_dim, action_dim, env, expert_buffer, args):
         # Basic information
         self.args = args
-        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        self.device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
         self.using_icvf = args.using_icvf
         self.state_action = args.state_action
         self.expert_sample = True
         self.update_everystep = args.update_everystep
         max_action = float(env.action_space.high[0])
         self.agent_kind = args.downstream
-        self.agent = TD3(state_dim, action_dim, self.args.lr_actor, self.args.lr_critic, self.device)
+        self.agent = TD3(state_dim, action_dim, self.args.lr_actor, self.args.lr_critic, self.device, self.args.curl)
         self.max_action = float(env.action_space.high[0])
         print("action_space:", env.action_space)
         print(f"max_action: {self.max_action}")
@@ -69,7 +69,12 @@ class Agent:
         else:
             self.phi_net = None
             print('Not using ICVF')
-
+        if self.args.using_pwdice:
+            model = torch.load("model/"+self.args.env_name.split('-')[0]+"-random-v2_contrastive"+"_pd"+".pt")
+            model.to(self.device)
+            self.f_net = model.encoder.float()
+            for name, param in self.f_net.named_parameters():
+                print(f"Layer: {name} | Size: {param.size()} | Values : {param[:2]}")
         if self.args.state_action:
             if self.args.using_icvf:
                 self.f_net = FullyConnectedNet(256 + action_dim, self.hidden_dims).to(self.device)
@@ -86,10 +91,8 @@ class Agent:
     def train(self):
         self.generate_exp_heat()
         self.pretrain()
-        # self.plot_reward()
         while self.time_step <= self.args.max_training_timesteps:
-            # state = self.env.reset(seed=self.time_step+self.args.seed)
-            state = self.env.reset()
+            state = self.env.reset(seed=self.time_step+self.args.seed)
             current_ep_reward = 0
             for _ in range(1, self.args.max_ep_len + 1):
                 if self.agent_kind == 'td3':
@@ -109,8 +112,8 @@ class Agent:
                         if self.args.using_icvf:
                             state_tensor = self.phi_net(state_tensor)
                             next_state_tensor = self.phi_net(next_state_tensor)
-                            if self.args.minus:
-                                next_state_tensor = next_state_tensor - state_tensor
+                        if self.args.minus:
+                            next_state_tensor = next_state_tensor - state_tensor
                         if self.state_action:
                             fake_reward = -self.f_net(state_tensor, action_tensor)
                         else:
@@ -125,6 +128,8 @@ class Agent:
                     else:
                         action = self.agent.select_action_withrandom(state)
                     next_state, reward, done, _ = self.env.step(action)
+                    # reward = sigmoid(reward)
+                    reward = torch.sigmoid(torch.tensor(reward)).item()
                     self.agent.buffer.add(state, action, next_state, reward, float(done))
                     state = next_state
                 
@@ -137,7 +142,7 @@ class Agent:
                         self.f_update()
                         self.get_pseudo_rewards()
                         
-                    # #self.get_pseudo_rewards() # Update the buffer with pseudo rewards
+                    # self.get_pseudo_rewards() # Update the buffer with pseudo rewards
                     # if self.agent_kind == 'ppo':
                     #     self.agent.update() # Update the agent with the pseudo rewards
 
@@ -147,10 +152,7 @@ class Agent:
                 if self.time_step % self.args.eval_freq == 0:
                     self.evaluation()
                     self.evaluate_policy()
-                if self.time_step % 40000 == 0:
-                    self.generate_heat()
-                # if self.time_step % self.args.action_std_decay_freq == 0 and self.agent_kind == 'ppo':
-                #     self.agent.decay_action_std(self.args.action_std_decay_rate, self.args.min_action_std)
+                
                 if done:
                     break
 
@@ -169,8 +171,8 @@ class Agent:
         if self.args.using_icvf:
             buffer_state = self.phi_net(buffer_state)
             buffer_next_state = self.phi_net(buffer_next_state)
-            if self.args.minus:
-                buffer_next_state = buffer_next_state - buffer_state
+        if self.args.minus:
+            buffer_next_state = buffer_next_state - buffer_state
 
         if self.state_action:
             fake_reward = -self.f_net(buffer_state, buffer_action).view(-1)
@@ -199,9 +201,9 @@ class Agent:
             self.expert_next_states = self.phi_net(self.expert_next_states)
             self.sample_states = self.phi_net(self.sample_states)
             self.sample_next_states = self.phi_net(self.sample_next_states)
-            if self.args.minus:
-                self.expert_next_states = self.expert_next_states - self.expert_states
-                self.sample_next_states = self.sample_next_states - self.sample_states
+        if self.args.minus:
+            self.expert_next_states = self.expert_next_states - self.expert_states
+            self.sample_next_states = self.sample_next_states - self.sample_states
         
         update_step = self.args.f_epoch
         self.f_net.train()
@@ -252,7 +254,8 @@ class Agent:
         self.sum_episodes_num = 0
     
     def generate_heat(self):
-        if "maze_open" not in self.args.env_name or self.state_action:
+        if "maze2d-open" not in self.args.env_name or self.state_action:
+            print("self.args.env_name:", self.args.env_name)
             return
         # Define the input range and sampling density
         x_min, x_max = 0, 5
@@ -291,10 +294,16 @@ class Agent:
         # Generate heatmap
         plt.figure(figsize=(8, 6))
         plt.contourf(X, Y, Z, levels=100, cmap='viridis')
-        plt.colorbar(label='f_net output value')
-        plt.title('Heatmap of f_net output')
-        plt.xlabel('x')
-        plt.ylabel('y')
+        cbar = plt.colorbar()
+        cbar.ax.tick_params(labelsize=15)  # 增大colorbar的字体大小
+        plt.title('maze_normal', fontsize=28)
+        plt.xlabel('x', fontsize=25)
+        plt.ylabel('y', fontsize=25)
+
+        plt.xticks(fontsize=18)  # 增大x轴刻度字体大小
+        plt.yticks(fontsize=18)  # 增大y轴刻度字体大小
+        plt.tight_layout()
+
 
         # Get the current system time (hour and minute)
         current_time = datetime.now().strftime("%H%M")
@@ -304,6 +313,7 @@ class Agent:
 
         # Save the figure with the timestamp and time in the filename
         plt.savefig(f'visual/heat_rewd_{current_time}_{timestep}.png')
+        print(f"Saved heatmap at timestep {self.time_step}")
         plt.close()
 
     def generate_exp_heat(self):

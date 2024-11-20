@@ -73,6 +73,43 @@ def network_weight_matrices(model, max_norm, eps=1e-8):
             module.weight.data = w / (denom + eps)
     return model
 
+class ContrastiveEncoder(nn.Module):
+    def __init__(self, input_size, output_size):
+        super().__init__()
+        middle_size = 128
+        self.net = nn.Sequential(
+            nn.Linear(input_size, middle_size),
+            nn.ReLU(),
+            nn.Linear(middle_size, middle_size),
+            nn.ReLU(),
+            nn.Linear(middle_size, output_size))
+    
+    def forward(self, s):
+        return self.net(s)
+
+class Contrastive_PD(nn.Module):
+    def __init__(self, input_size):
+        super().__init__()
+        self.input_size = input_size
+        self.feature_size = 32
+        self.encoder = ContrastiveEncoder(input_size, self.feature_size)
+        self.W = torch.nn.Parameter(torch.rand(self.feature_size, self.feature_size)) # note the "distance" is euclidean in embedding space; W does not have to be semi positive-definite
+        
+    def encode(self, x):
+        v = self.encoder(x)
+        return v / torch.norm(v, dim=-1, keepdim=True)
+        
+    def forward(self, s1, s2):
+        z1, z2 = self.encode(s1), self.encode(s2)
+        # logits = torch.matmul(z1, torch.matmul(self.W, z2.T))
+        #print("logits-before:", logits)
+        W2 = torch.matmul(F.softplus(self.W), F.softplus(self.W.T))
+        logits = torch.matmul(z1, torch.matmul(W2, z2.T))
+        # print("logit shape:", logits.shape)
+        #print("logits-before:", logits)
+        logits -= torch.max(logits, 1)[0][:, None]
+        #print("logits-after:", logits)
+        return logits 
 
 # def _get_batch(iterator, loader):
 #     try:

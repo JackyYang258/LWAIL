@@ -29,7 +29,7 @@ def get_dataset(env,
     #     'terminals': data['terminals'],
     #     'next_observations': data['next_observations'] if 'next_observations' in data else None
     # }
-    if 'maze_open' in env_name:
+    if 'maze2d-open' in env_name:
         print("Loading maze dataset")
         dataset = np.load("/home/kaiyan3/siqi/IntentDICE/d4rl_datasets/maze2d_expert_dataset.npz", allow_pickle=True)
         dataset = {
@@ -74,8 +74,8 @@ def get_dataset(env,
     dataset['dones_float'] = dones_float
 
     # Print the locations where dones_float is equal to 1
-    done_indices = np.where(dones_float == 1)[0]
-    print(f"Locations where dones_float is 1: {done_indices}")
+    # done_indices = np.where(dones_float == 1)[0]
+    # print(f"Locations where dones_float is 1: {done_indices}")
     
     return dataset
 
