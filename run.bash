@@ -5,8 +5,6 @@ python main.py \
 --update_timestep 4000 \
 --downstream 'td3' \
 --expert_episode one \
---using_icvf \
---curl \
 --minus \
 --seed 0 \
---wandb_name curl
+--wandb_name reward

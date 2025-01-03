@@ -18,7 +18,7 @@ class Agent:
     def __init__(self, state_dim, action_dim, env, expert_buffer, args):
         # Basic information
         self.args = args
-        self.device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+        self.device = torch.device('cuda:3' if torch.cuda.is_available() else 'cpu')
         self.using_icvf = args.using_icvf
         self.state_action = args.state_action
         self.expert_sample = True
@@ -349,12 +349,16 @@ class Agent:
     def evaluate_policy(self, eval_episodes=10):
         env = gym.make(self.args.env_name)
         avg_reward = 0.0
+        avg_freward = 0.0
+        avg_sig_freward = 0.0
         avg_episode_length = 0.0
 
         for ep in range(eval_episodes):
             # state = env.reset(seed = (self.args.seed + ep + self.time_step))
             state = env.reset()
             episode_reward = 0.0
+            episode_freward = 0.0
+            episode_sig_freward = 0.0
             done = False
             episode_length = 0
 
@@ -362,21 +366,40 @@ class Agent:
                 action = self.agent.select_action(state)
 
                 next_state, reward, done, _ = env.step(action)
+                self.f_net.eval()
+                state_tensor = torch.FloatTensor(state).to(self.device)
+                next_state_tensor = torch.FloatTensor(next_state).to(self.device)
+                if self.args.using_icvf:
+                    state_tensor = self.phi_net(state_tensor)
+                    next_state_tensor = self.phi_net(next_state_tensor)
+                next_state_tensor = next_state_tensor - state_tensor
+                fake_reward = -self.f_net(state_tensor, next_state_tensor)
+                sig_fake_reward = torch.sigmoid(fake_reward)
+                episode_freward += fake_reward.item()
+                episode_sig_freward += sig_fake_reward.item()
+                self.f_net.train()
+                
                 episode_reward += reward
                 state = next_state
                 episode_length += 1
 
             avg_reward += episode_reward
+            avg_freward += episode_freward
+            avg_sig_freward += episode_sig_freward
             avg_episode_length += episode_length
 
         avg_reward /= eval_episodes
+        avg_freward /= eval_episodes
+        avg_sig_freward /= eval_episodes
         avg_episode_length /= eval_episodes
 
         normalized_score = get_normalized_score(self.args.env_name, avg_reward) * 100
         wandb.log({
             'eval_average_score': avg_reward, 
             'eval_normalized_score': normalized_score,
-            'eval_avg_episode_length': avg_episode_length
+            'eval_avg_episode_length': avg_episode_length,
+            'eval_f_reward': avg_freward,
+            'eval_sig_f_reward': avg_sig_freward
         }, step=self.time_step)
         print(f"Evaluation over {eval_episodes} episodes: Avg Reward = {avg_reward:.2f}, Avg Episode Length = {avg_episode_length:.2f}")
 

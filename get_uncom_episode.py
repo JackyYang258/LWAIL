@@ -4,7 +4,7 @@ import gym
 from d4rl_utils import get_dataset
 import pickle  # To store trajectories
 
-def save_top_rewards_episodes(env_name, save_dir, top_k=10, skip=10):
+def save_top_rewards_episodes(env_name, save_dir, top_k=20, skip=20):
     # Create environment
     env = gym.make(env_name)
 
@@ -14,12 +14,12 @@ def save_top_rewards_episodes(env_name, save_dir, top_k=10, skip=10):
     # Get the indices where episode ends (dones_float == 1)
     done_indices = np.where(dataset['dones_float'] == 1)[0]
 
-    if len(done_indices) < 20:
+    if len(done_indices) < 50:
         print(f"Less than 20 complete episodes in {env_name}. Skipping...")
         return
     
     # Get the first 20 episodes
-    num_episodes = min(20, len(done_indices))
+    num_episodes = min(50, len(done_indices))
     episodes = []
     rewards = []
 
@@ -68,7 +68,7 @@ def save_top_rewards_episodes(env_name, save_dir, top_k=10, skip=10):
 env_names = ["hopper-expert-v2", "halfcheetah-expert-v2", "walker2d-expert-v2", "ant-expert-v2"]
 
 # Directory to save trajectories
-save_dir = "uncomplete_expert_trajectory"
+save_dir = "uncomplete20_expert_trajectory"
 os.makedirs(save_dir, exist_ok=True)
 
 # Loop through environments and save the top k reward episodes
