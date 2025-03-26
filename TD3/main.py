@@ -1,6 +1,7 @@
 import numpy as np
 import torch
 import gym
+import shimmy
 import argparse
 import os
 import d4rl
@@ -9,7 +10,7 @@ import utils
 import TD3
 import OurDDPG
 import DDPG
-import wandb
+# import wandb
 
 
 # Runs policy for X episodes and returns average reward
@@ -60,7 +61,7 @@ if __name__ == "__main__":
 	
 	parser = argparse.ArgumentParser()
 	parser.add_argument("--policy", default="TD3")                  # Policy name (TD3, DDPG or OurDDPG)
-	parser.add_argument("--env", default="maze2d-open-v0")          # OpenAI gym environment name
+	parser.add_argument("--env", default="maze2d-medium-dense-v1")          # OpenAI gym environment name
 	parser.add_argument("--seed", default=0, type=int)              # Sets Gym, PyTorch and Numpy seeds
 	parser.add_argument("--start_timesteps", default=25e3, type=int)# Time steps initial random policy is used
 	parser.add_argument("--eval_freq", default=5e3, type=int)       # How often (time steps) we evaluate
@@ -87,7 +88,12 @@ if __name__ == "__main__":
 	if args.save_model and not os.path.exists("./models"):
 		os.makedirs("./models")
 
-	env = gym.make(args.env)
+	if "dm" in args.env:
+		# dm_control2gym wraps a dm_control environment to make it compatible with OpenAI gym
+		env = gym.make("dm_control/reacher-easy-v0")
+	else:
+		print(args.env)
+		env = gym.make(args.env)
 	print("max_episode_steps:", env._max_episode_steps)
 	# Set seeds
 	env.seed(args.seed)
@@ -125,9 +131,9 @@ if __name__ == "__main__":
 
 	replay_buffer = utils.ReplayBuffer(state_dim, action_dim)
  
-	device = torch.device("cuda:7" if torch.cuda.is_available() else "cpu")
+	device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 	evaluations = [eval_policy(policy, args.env, args.seed)]
-	wandb.init(project='intentDICE', entity="team_siqi", config=args, name="td3", mode='online')
+	# wandb.init(project='intentDICE', entity="team_siqi", config=args, name="td3", mode='online')
 	state, done = env.reset(), False
 	print("state:", state)
 	episode_reward = 0
@@ -163,7 +169,7 @@ if __name__ == "__main__":
 
 		if done: 
 			# +1 to account for 0 indexing. +0 on ep_timesteps since it will increment +1 even if done=True
-			print(f"Total T: {t+1} Episode Num: {episode_num+1} Episode T: {episode_timesteps} Reward: {episode_reward:.3f}")
+			print(f"Total T: {t+1} Episode Num: {episode_num+1} Episode T: {episode_timesteps} Reward: {episode_reward:.3f} Episode Length: {episode_timesteps}")
 			# Reset environment
 			state, done = env.reset(), False
 			episode_reward = 0
@@ -173,7 +179,7 @@ if __name__ == "__main__":
 		# Evaluate episode
 		if (t + 1) % args.eval_freq == 0:
 			evaluations.append(eval_policy(policy, args.env, args.seed))
-			wandb.log({"eval_reward": evaluations[-1]}, step=t)
+			# wandb.log({"eval_reward": evaluations[-1]}, step=t)
 			np.save(f"./results/{file_name}", evaluations)
 			policy.save(f"./models/{file_name}")
 	eval_policy(policy, args.env, args.seed)

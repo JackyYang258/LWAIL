@@ -105,6 +105,7 @@ class ActorCritic(nn.Module):
             action = action.reshape(-1, self.action_dim)
         
         action_logprobs = dist.log_prob(action)
+        
         dist_entropy = dist.entropy()
         state_values = self.critic(state)
         
@@ -188,7 +189,7 @@ class PPO:
             # Evaluating old actions and values
             logprobs, state_values, dist_entropy = self.policy.evaluate(old_states, old_actions)
 
-            # match state_values tensor dimensions with rewards tensor
+            # match state_values tensor dimensions with rewards tensor 
             state_values = torch.squeeze(state_values)
             
             # Finding the ratio (pi_theta / pi_theta__old)

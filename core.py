@@ -3,6 +3,8 @@ from tqdm import tqdm
 
 from network import FullyConnectedNet, PhiNet
 from td3 import TD3
+from ddpg import DDPG
+from sac import SAC
 from utils import time, gradient_penalty, get_normalized_score
 from sklearn.decomposition import PCA
 import matplotlib.pyplot as plt
@@ -18,14 +20,20 @@ class Agent:
     def __init__(self, state_dim, action_dim, env, expert_buffer, args):
         # Basic information
         self.args = args
-        self.device = torch.device('cuda:3' if torch.cuda.is_available() else 'cpu')
+        self.device = torch.device(self.args.cuda if torch.cuda.is_available() else 'cpu')
         self.using_icvf = args.using_icvf
         self.state_action = args.state_action
         self.expert_sample = True
         self.update_everystep = args.update_everystep
         max_action = float(env.action_space.high[0])
         self.agent_kind = args.downstream
-        self.agent = TD3(state_dim, action_dim, self.args.lr_actor, self.args.lr_critic, self.device, self.args.curl)
+        if self.agent_kind == 'td3':
+            self.agent = TD3(state_dim, action_dim, self.args.lr_actor, self.args.lr_critic, self.device, self.args.curl)
+        elif self.agent_kind == "ddpg":
+            self.agent = DDPG(state_dim, action_dim, self.args.lr_actor, self.args.lr_critic, self.device)
+        elif self.agent_kind == 'sac':
+            self.agent = SAC(state_dim, action_dim, self.args.lr_actor, self.args.lr_critic, self.args.gamma, self.device)
+        self.max_action = float(env.action_space.high[0])
         self.max_action = float(env.action_space.high[0])
         print("action_space:", env.action_space)
         print(f"max_action: {self.max_action}")
@@ -95,7 +103,7 @@ class Agent:
             state = self.env.reset(seed=self.time_step+self.args.seed)
             current_ep_reward = 0
             for _ in range(1, self.args.max_ep_len + 1):
-                if self.agent_kind == 'td3':
+                if self.agent_kind in ['td3', 'ddpg', 'sac']:
                     if self.time_step < self.args.start_timesteps:
                         action = self.env.action_space.sample()
                     else:
@@ -138,7 +146,7 @@ class Agent:
                 # print("time_step:", self.time_step)
                 if self.time_step % self.args.update_timestep == 0:
                     
-                    if self.agent_kind == 'td3':
+                    if self.agent_kind in ['td3', 'ddpg', 'sac']:
                         self.f_update()
                         self.get_pseudo_rewards()
                         
@@ -147,7 +155,10 @@ class Agent:
                     #     self.agent.update() # Update the agent with the pseudo rewards
 
                 if self.time_step > self.args.update_timestep:
-                    self.agent.train()
+                    if self.agent_kind in ['td3', 'ddpg']:
+                         self.agent.train()
+                    elif self.agent_kind == 'sac' and self.time_step % 4096 == 0: 
+                         self.agent.update()
                     
                 if self.time_step % self.args.eval_freq == 0:
                     self.evaluation()

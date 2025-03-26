@@ -33,11 +33,23 @@ def main(args):
         file_path = os.path.join(savedir, args.env_name + ".pkl")
         with open(file_path, 'rb') as f:
             expert_dataset = pickle.load(f)
-    elif args.expert_episode == "uncomplete":
-        savedir = "uncomplete_expert_trajectory"
+            
+    elif args.expert_episode == "uncom5":
+        savedir = "uncomplete5_expert_trajectory"
         file_path = os.path.join(savedir, args.env_name + ".pkl")
         with open(file_path, 'rb') as f:
             expert_dataset = pickle.load(f)
+    elif args.expert_episode == "uncom10":
+        savedir = "uncomplete10_expert_trajectory"
+        file_path = os.path.join(savedir, args.env_name + ".pkl")
+        with open(file_path, 'rb') as f:
+            expert_dataset = pickle.load(f)
+    elif args.expert_episode == "uncom20":
+        savedir = "uncomplete20_expert_trajectory"
+        file_path = os.path.join(savedir, args.env_name + ".pkl")
+        with open(file_path, 'rb') as f:
+            expert_dataset = pickle.load(f)
+            
     elif args.expert_episode == "multiple":
         expert_dataset = get_dataset(env, args.env_name)
     elif args.expert_episode == "sample":
@@ -96,7 +108,7 @@ def main(args):
 
 if __name__ == '__main__':
     from argparse import ArgumentParser
-    parser = ArgumentParser()
+    parser = ArgumentParser() 
     
     # Environment
     parser.add_argument('--env_name', type=str, default='hopper-expert-v2', help='Name of the environment to use.')
@@ -104,6 +116,7 @@ if __name__ == '__main__':
     parser.add_argument('--seed', type=int, default=0, help='Random seed for reproducibility.')
 
     parser.add_argument('--icvf_path', type=str, help='Path to the ICVF model checkpoint.')
+    parser.add_argument('--cuda', type=str)
     parser.add_argument('--using_icvf', action='store_true', help='Flag to indicate whether to use ICVF.')
     parser.add_argument('--using_pwdice', action='store_true')
     parser.add_argument('--state_action', action='store_true', help='Flag to indicate whether to use only state.')

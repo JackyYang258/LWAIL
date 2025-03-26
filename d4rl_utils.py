@@ -3,6 +3,7 @@ import gym
 import numpy as np
 
 import time
+import pickle
 import os
 
 def make_env(env_name: str):
@@ -29,9 +30,23 @@ def get_dataset(env,
     #     'terminals': data['terminals'],
     #     'next_observations': data['next_observations'] if 'next_observations' in data else None
     # }
-    if 'maze2d-open' in env_name:
+    if 'maze2d-' in env_name:
         print("Loading maze dataset")
-        dataset = np.load("/home/kaiyan3/siqi/IntentDICE/d4rl_datasets/maze2d_expert_dataset.npz", allow_pickle=True)
+        file_path = "/home/kaiyan3/siqi/IntentDICE/multiple_expert_trajectory/maze2d-umaze-dense-v1.pkl"
+        with open(file_path, 'rb') as f:
+            dataset = pickle.load(f)
+        dataset = {
+            'observations': dataset['observations'],
+            'actions': dataset['actions'],
+            'rewards': dataset['rewards'],
+            'terminals': dataset['terminals'],
+            'next_observations': dataset['next_observations'] 
+        }
+    elif 'dm_control' in env_name:
+        path_name = env_name.split("/")[1]
+        file_path = "/home/kaiyan3/siqi/IntentDICE/multiple_expert_trajectory/" + path_name + ".pkl"
+        with open(file_path, 'rb') as f:
+            dataset = pickle.load(f)
         dataset = {
             'observations': dataset['observations'],
             'actions': dataset['actions'],
@@ -44,16 +59,16 @@ def get_dataset(env,
     print(dataset['observations'].shape)
     print(dataset['next_observations'].shape)
 
-    import matplotlib.pyplot as plt
-    x = dataset['observations'][:1000][:,0]
-    y = dataset['observations'][:1000][:,1]
-    plt.scatter(x, y, c='blue', marker='o')
+    # import matplotlib.pyplot as plt
+    # x = dataset['observations'][:1000][:,0]
+    # y = dataset['observations'][:1000][:,1]
+    # plt.scatter(x, y, c='blue', marker='o')
 
-    plt.title("Expert States Plot (from PyTorch Tensor)")
-    plt.xlabel("X Coordinate")
-    plt.ylabel("Y Coordinate")
-    plt.savefig(f'visual/data_points')  # Add time_step to the filename
-    plt.close()
+    # plt.title("Expert States Plot (from PyTorch Tensor)")
+    # plt.xlabel("X Coordinate")
+    # plt.ylabel("Y Coordinate")
+    # plt.savefig(f'visual/data_points')  # Add time_step to the filename
+    # plt.close()
  
     if clip_to_eps:
         lim = 1 - eps

@@ -190,7 +190,7 @@ class TD3:
     def train(self, batch_size = 256):
         self.total_it += 1
         
-        state, action, next_state, reward, not_done = self.buffer.sample(batch_size)
+        state, action, next_state, reward, not_done = self.buffer.sample(batch_size) 
 
         with torch.no_grad():
             # Select action according to policy and add clipped noise

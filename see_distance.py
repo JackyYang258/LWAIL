@@ -73,12 +73,11 @@ if __name__ == "__main__":
     random.seed(seed) 
     torch.backends.cudnn.deterministic = True 
     torch.backends.cudnn.benchmark = False
-    icvf_hidden_dims = [111] + [256, 256]
+    icvf_hidden_dims = [17] + [256, 256]
     phi_net = PhiNet(icvf_hidden_dims)
     print("phi_net:", phi_net)
-    env_fname = "ant"
+    env_fname = "halfcheetah"
 
-    # icvf_path = "/home/kaiyan3/siqi/IntentDICE/model/hopper.pt"
     icvf_path = "/home/kaiyan3/siqi/IntentDICE/model/" + env_fname +".pt"
     phi_net.load_state_dict(torch.load(icvf_path))
     for param in phi_net.parameters():
@@ -139,17 +138,17 @@ if __name__ == "__main__":
     # t-SNE before with lines connecting adjacent points
     axs[0].scatter(tsne_obs_before[:, 0], tsne_obs_before[:, 1], c=colors[:, 0], label='Before PhiNet', alpha=0.6)
     axs[0].plot(tsne_obs_before[:, 0], tsne_obs_before[:, 1], color='blue', alpha=0.3)
-    axs[0].set_title('state space', fontsize=25)
-    axs[0].set_xlabel('Dim 1', fontsize=20)
-    axs[0].set_ylabel('Dim 2', fontsize=20)
+    axs[0].set_title('State Space', fontsize=25)
+    axs[0].set_xlabel('Dimension 1', fontsize=20)
+    axs[0].set_ylabel('Dimension 2', fontsize=20)
     axs[0].tick_params(axis='both', labelsize=16)  # Adjust tick label size
 
     # t-SNE after with lines connecting adjacent points
     axs[1].scatter(tsne_obs_after[:, 0] + 15, tsne_obs_after[:, 1], c=colors[:, 0], label='After PhiNet', alpha=0.6)
     axs[1].plot(tsne_obs_after[:, 0] + 15, tsne_obs_after[:, 1], color='green', alpha=0.3) # Connect adjacent points
-    axs[1].set_title('latent space', fontsize=25)
-    axs[1].set_xlabel('Dim 1', fontsize=20)
-    axs[1].set_ylabel('Dim 2', fontsize=20)
+    axs[1].set_title('Latent Space', fontsize=25)
+    axs[1].set_xlabel('Dimension 1', fontsize=20)
+    axs[1].set_ylabel('Dimension 2', fontsize=20)
     axs[1].tick_params(axis='both', labelsize=16)  # Adjust tick label size
     # Connect adjacent points
 
@@ -160,13 +159,8 @@ if __name__ == "__main__":
     plt.subplots_adjust(wspace=0.25, hspace=0.3)
     plt.subplots_adjust(bottom=0.08)
 
-
     # Save as PDF with increased DPI and tight bounding box
-    plt.savefig('visualicvf/ant100expert100medium.pdf', format='pdf', bbox_inches='tight', dpi=300)
-
-    # Show the plot
-    plt.show()
-
+    plt.savefig('visualicvf/halfcheetah100expert100medium.pdf', format='pdf', bbox_inches='tight', dpi=300)
 
 
 

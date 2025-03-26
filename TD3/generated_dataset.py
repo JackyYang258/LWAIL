@@ -9,6 +9,7 @@ import utils
 import TD3
 import OurDDPG
 import DDPG
+import pickle
 
 
 # Runs policy for X episodes and returns average reward
@@ -83,7 +84,7 @@ if __name__ == "__main__":
 	
 	parser = argparse.ArgumentParser()
 	parser.add_argument("--policy", default="TD3")                  # Policy name (TD3, DDPG or OurDDPG)
-	parser.add_argument("--env", default="maze2d-open-dense-v0")          # OpenAI gym environment name
+	parser.add_argument("--env", default="maze2d-umaze-dense-v1")          # OpenAI gym environment name
 	parser.add_argument("--seed", default=0, type=int)              # Sets Gym, PyTorch and Numpy seeds
 	parser.add_argument("--start_timesteps", default=25e3, type=int)# Time steps initial random policy is used
 	parser.add_argument("--eval_freq", default=5e3, type=int)       # How often (time steps) we evaluate
@@ -144,13 +145,14 @@ if __name__ == "__main__":
 
 	policy.load(f"./models/{file_name}")
 	eval_policy(policy, args.env, args.seed)
-	dataset, avg_reward = generate_expert_data(policy, args.env, args.seed, max_data_size=1000000)
- #save dataset
+	dataset, avg_reward = generate_expert_data(policy, args.env, args.seed, max_data_size=100000)
+ 	#save dataset
+	with open(f'dataset/{args.env}.pkl', 'wb') as f:
+		pickle.dump(dataset, f)
  
 	import matplotlib.pyplot as plt
 	x = dataset['observations'][:1000][:,0]
 	y = dataset['observations'][:1000][:,1]
-	print(x)
 	plt.scatter(x, y, c='blue', marker='o')
 
 	plt.title("Expert States Plot (from PyTorch Tensor)")
