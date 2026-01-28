@@ -74,13 +74,14 @@ bash all_run.bash
 ## 📍 Citation
 If you find this code or paper useful for your research, please cite:
 
-代码段
+```
 @article{YourName202X,
   title={Latent Wasserstein Adversarial Imitation Learning},
   author={Author One and Author Two and Author Three},
   journal={arXiv preprint arXiv:XXXX.XXXXX},
   year={202X}
 }
+```
 
 ## 📧 Contact
 For any questions, please feel free to open an issue in this repository(prefered) or reach out to Siqi Yang at siqiyang@illinois.edu.
