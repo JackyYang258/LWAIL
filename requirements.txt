@@ -1,0 +1,17 @@
+# Core
+python>=3.8
+
+# Deep Learning
+torch>=1.12
+
+# Numerical
+numpy>=1.21
+scikit-learn>=1.0
+
+# Visualization
+matplotlib>=3.5
+
+# Utilities
+tqdm
+wandb
+

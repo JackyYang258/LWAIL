@@ -19,23 +19,21 @@ or a few state-only expert episodes to achieve expert-level performance. Through
 To run the experiments, please set up the environment using the following commands.
 
 ### Prerequisites
-* Python 3.x
-* PyTorch (Version X.X)
-* [List other key dependencies here, e.g., Gym, NumPy, etc.]
+* Python = 3.8
+* PyTorch 2.4.1 with CUDA 12.4
+* [D4RL]([https://github.com/Farama-Foundation/D4RL])
+* [dm_control]([https://github.com/google-deepmind/dm_control])(optional, not required for main experiments)
+
 
 ### Installation
 We recommend using Anaconda to manage the environment:
 
+For other Python packages, install the required dependencies via:
 ```bash
-# Create the environment
-conda create -n lwail python=3.8 -y
-conda activate lwail
-
-# Install dependencies
 pip install -r requirements.txt
 ```
 
-Note: If you do not have a requirements.txt, please ensure you install the dependencies listed in environment.yml or manually install the necessary packages.
+Note: Other versions of Python and PyTorch may also work. The most important requirement is that D4RL and its dependencies are installed successfully.
 
 ## 📂 Models and Datasets
 
@@ -45,7 +43,7 @@ We provide our basic ICVF (Intent-Conditioned Value Function) model in the icvf_
 
 For other model variants or to access the training code for the base model, please refer to the external codebase:
 
-ICVF-PyTorch Repository
+ICVF-PyTorch Repository(todo)
 
 ### Datasets
 
@@ -72,15 +70,6 @@ To perform a quick reimplementation of the main experiments presented in the pap
 ```Bash
 bash all_run.bash
 ```
-## 📂 Project Structure
-
-.
-├── datasets/           # Scripts for data generation and sample trajectories
-├── model/              # Pre-trained ICVF models
-├── run.bash            # Script for single experiment execution
-├── all_run.bash        # Script for reproducing main results
-├── README.md
-└──     # Source code files
 
 ## 📍 Citation
 If you find this code or paper useful for your research, please cite:
