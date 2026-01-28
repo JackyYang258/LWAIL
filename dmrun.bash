@@ -1,0 +1,11 @@
+python main_dm.py \
+--env_name mujoco/humanoid/expert-v0 \
+--f_epoch 30 \
+--max_training_timesteps 2000000 \
+--update_timestep 4000 \
+--downstream 'td3' \
+--expert_episode one \
+--minus \
+--seed 0 \
+--cuda cuda:4 \
+--wandb_name human_icvf

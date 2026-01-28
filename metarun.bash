@@ -1,0 +1,12 @@
+python main_meta.py \
+--env_name pick-place \
+--f_epoch 30 \
+--max_training_timesteps 1000000 \
+--update_timestep 4000 \
+--downstream 'td3' \
+--expert_episode multiple \
+--minus \
+--seed 1 \
+--cuda cuda:5 \
+--wandb_name metaicvf \
+--using_icvf \

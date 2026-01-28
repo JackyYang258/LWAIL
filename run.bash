@@ -1,0 +1,11 @@
+python main.py \
+--env_name maze2d-large-dense-v1 \
+--f_epoch 30 \
+--max_training_timesteps 1000000 \
+--update_timestep 4000 \
+--downstream 'td3' \
+--expert_episode one \
+--minus \
+--seed 0 \
+--cuda cuda:4 \
+--wandb_name largenoicvfnoise0.3\
