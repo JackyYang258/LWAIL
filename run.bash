@@ -1,5 +1,5 @@
 python main.py \
---env_name maze2d-large-dense-v1 \
+--env_name hopper-expert-v2 \
 --f_epoch 30 \
 --max_training_timesteps 1000000 \
 --update_timestep 4000 \
@@ -7,5 +7,6 @@ python main.py \
 --expert_episode one \
 --minus \
 --seed 0 \
---cuda cuda:4 \
---wandb_name largenoicvfnoise0.3\
+--using_icvf \
+--cuda cuda:0 \
+--wandb_name hopper

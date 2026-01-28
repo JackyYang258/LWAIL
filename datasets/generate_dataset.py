@@ -1,8 +1,6 @@
 import gym
 import pickle
-import metaworld
 import numpy as np
-from metaworld.envs import ALL_V2_ENVIRONMENTS_GOAL_OBSERVABLE
 import d4rl
 SEED = 42
 
