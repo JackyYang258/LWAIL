@@ -22,7 +22,6 @@ record/
 wandb/
 # data files
 *.pkl
-*.pt
 *.swp
 # misc
 useful_pics/
