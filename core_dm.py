@@ -73,7 +73,7 @@ class Agent:
                 env_firstname = (self.args.env_name.split('/')[1]).split('-')[0]
             else:
                 env_firstname = 'mujocohumanoid'
-            model_dir = os.path.join(os.getcwd(), "model")
+            model_dir = os.path.join(os.getcwd(), "icvf_model")
             icvf_path = os.path.join(model_dir, f"{env_firstname}.pt")
             self.phi_net.load_state_dict(torch.load(icvf_path, weights_only=False))
             for param in self.phi_net.parameters():
@@ -267,104 +267,7 @@ class Agent:
         self.sum_episodes_reward = 0
         self.sum_episodes_num = 0
     
-    def generate_heat(self):
-        if "maze2d-" not in self.args.env_name or self.state_action:
-            print("self.args.env_name:", self.args.env_name)
-            return
-        else:
-            print("plotting heat")
-        # Define the input range and sampling density
-        x_min, x_max = 0.5, 3.5
-        y_min, y_max = 0.5, 3.5
-        density = 0.02
 
-        # Generate x and y coordinates
-        x = np.arange(x_min, x_max, density)
-        y = np.arange(y_min, y_max, density)
-        X, Y = np.meshgrid(x, y)
-
-        # Set f_net to evaluation mode
-        self.f_net.eval()
-
-        # Generate input data, first two are xy coordinates, last two are 00
-        input_grid = np.c_[X.ravel(), Y.ravel(),  np.zeros_like(Y.ravel()), np.zeros_like(Y.ravel())]
-        if self.args.using_icvf:
-            input_tensor = self.phi_net(torch.tensor(input_grid, dtype=torch.float32).float().to(self.device))
-        else:
-            input_tensor = torch.tensor(input_grid, dtype=torch.float32).float().to(self.device)
-
-        # Perform forward pass to compute the output
-        with torch.no_grad():
-            # if self.only_state:
-            #     output_tensor = self.f_net(input_tensor)
-            
-            output_tensor = -self.f_net(input_tensor, input_tensor)
-                
-        # output_tensor = -(output_tensor- output_tensor.mean())/output_tensor.std()
-        # output_tensor = torch.exp(output_tensor)
-
-        # output_tensor = torch.sigmoid(output_tensor)
-        # Assuming output is a scalar value
-        Z = output_tensor.cpu().numpy().reshape(X.shape)
-
-        # Generate heatmap
-        plt.figure(figsize=(8, 6))
-        plt.contourf(X, Y, Z, levels=100, cmap='viridis')
-        cbar = plt.colorbar()
-        cbar.ax.tick_params(labelsize=15)  # 增大colorbar的字体大小
-        plt.title('Normal Space', fontsize=28)
-        plt.xlabel('X Coordinate', fontsize=25)
-        plt.ylabel('Y Coordinate', fontsize=25)
-        
-        plt.plot([1.5, 1.5], [0.5, 2.5], color='orange', linewidth=2.5)
-        plt.plot([1.5, 2.5], [2.5, 2.5], color='orange', linewidth=2.5)
-        plt.plot([2.5, 2.5], [0.5, 2.5], color='orange', linewidth=2.5)
-
-        plt.xticks(fontsize=18)  # 增大x轴刻度字体大小
-        plt.yticks(fontsize=18)  # 增大y轴刻度字体大小
-        plt.tight_layout()
-
-
-        # Get the current system time (hour and minute)
-        current_time = datetime.now().strftime("%H%M")
-
-        # Get the current timestep
-        timestep = str(self.time_step)
-
-        # Save the figure with the timestamp and time in the filename
-        plt.savefig(f'visual/heat_rewd_{current_time}_{timestep}.png')
-        print(f"Saved heatmap at timestep {self.time_step}")
-        plt.close()
-
-    # def generate_exp_heat(self):
-    #     if "maze" not in self.args.env_name or self.state_action:
-    #         return
-    #     # Define the input range and sampling density
-    #     x_min, x_max = 0, 5
-    #     y_min, y_max = 0, 5
-    #     density = 0.02
-
-    #     x = np.arange(x_min, x_max, density)
-    #     y = np.arange(y_min, y_max, density)
-    #     X, Y = np.meshgrid(x, y)
-
-    #     input_grid = np.c_[X.ravel(), Y.ravel()] 
-    #     target = np.array([2, 3])
-    #     distances = np.linalg.norm(input_grid - target, axis=1)
-    #     output_values = np.exp(-distances)
-    #     Z = output_values.reshape(X.shape)
-
-    #     # Generate heatmap
-    #     plt.figure(figsize=(8, 6))
-    #     plt.contourf(X, Y, Z, levels=100, cmap='viridis')
-    #     plt.colorbar(label='exp(-distance) to (2, 3)')
-    #     plt.title('Heatmap of exp(-distance) to (2, 3)')
-    #     plt.xlabel('x')
-    #     plt.ylabel('y')
-
-    #     # Save the figure with the timestamp and time in the filename
-    #     plt.savefig(f'visual/exp_heat.png')
-    #     plt.close()
 
     def evaluate_policy(self, eval_episodes=10):
         if 'dm_control' in self.args.env_name:

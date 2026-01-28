@@ -17,7 +17,6 @@ import minari
 
 def main(args):
 
-    
     if 'dm_control' in args.env_name:
         env = gym.make(args.env_name)  
         env = gym.wrappers.FlattenObservation(env)
@@ -34,59 +33,59 @@ def main(args):
         file_path = os.path.join(savedir, args.env_name + ".pkl")
         with open(file_path, 'rb') as f:
             expert_dataset = pickle.load(f)
-    elif args.expert_episode == "five":
-        savedir = "5_expert_trajectory"
-        file_path = os.path.join(savedir, args.env_name + ".pkl")
-        with open(file_path, 'rb') as f:
-            expert_dataset = pickle.load(f)
+    # elif args.expert_episode == "five":
+    #     savedir = "5_expert_trajectory"
+    #     file_path = os.path.join(savedir, args.env_name + ".pkl")
+    #     with open(file_path, 'rb') as f:
+    #         expert_dataset = pickle.load(f)
             
-    elif args.expert_episode == "uncom5":
-        savedir = "uncomplete5_expert_trajectory"
-        file_path = os.path.join(savedir, args.env_name + ".pkl")
-        with open(file_path, 'rb') as f:
-            expert_dataset = pickle.load(f)
-    elif args.expert_episode == "uncom10":
-        savedir = "uncomplete10_expert_trajectory"
-        file_path = os.path.join(savedir, args.env_name + ".pkl")
-        with open(file_path, 'rb') as f:
-            expert_dataset = pickle.load(f)
-    elif args.expert_episode == "uncom20":
-        savedir = "uncomplete20_expert_trajectory"
-        file_path = os.path.join(savedir, args.env_name + ".pkl")
-        with open(file_path, 'rb') as f:
-            expert_dataset = pickle.load(f)
+    # elif args.expert_episode == "uncom5":
+    #     savedir = "uncomplete5_expert_trajectory"
+    #     file_path = os.path.join(savedir, args.env_name + ".pkl")
+    #     with open(file_path, 'rb') as f:
+    #         expert_dataset = pickle.load(f)
+    # elif args.expert_episode == "uncom10":
+    #     savedir = "uncomplete10_expert_trajectory"
+    #     file_path = os.path.join(savedir, args.env_name + ".pkl")
+    #     with open(file_path, 'rb') as f:
+    #         expert_dataset = pickle.load(f)
+    # elif args.expert_episode == "uncom20":
+    #     savedir = "uncomplete20_expert_trajectory"
+    #     file_path = os.path.join(savedir, args.env_name + ".pkl")
+    #     with open(file_path, 'rb') as f:
+    #         expert_dataset = pickle.load(f)
             
-    elif args.expert_episode == "multiple":
-        expert_dataset = get_dataset(env, args.env_name)
-        print(expert_dataset)
-    elif args.expert_episode == "sample":
-        sampled_data = {}
-        expert_dataset = get_dataset(env, args.env_name)
-        for key, array in expert_dataset.items():
-            sample_size = 10000
-            size = array.shape[0]
-            random_indices = np.random.choice(size, sample_size, replace=False)
-            if array.ndim == 1: 
-                sampled_data[key] = array[random_indices]
-            elif array.ndim == 2:  
-                sampled_data[key] = array[random_indices, :]
-            else:
-                raise ValueError("Unsupported array dimension. Only 1D or 2D arrays are supported.")
-        expert_dataset = sampled_data
-    elif args.expert_episode == "mismatchant":
-        demo_file = f"mismatch/ant.pkl"
-        demo = pickle.load(open(demo_file, 'rb'))
-        expert_obs = np.array(demo['observations'][:1000])
-        expert_actions = np.array(demo['actions'][:1000])
-        expert_next_obs = np.array(demo['next_observations'][:1000])
-        expert_dataset = {'observations': expert_obs, 'actions': expert_actions, 'next_observations': expert_next_obs}
-    elif args.expert_episode == "mismatchhalfcheetah":
-        demo_file = f"mismatch/halfcheetah.pkl"
-        demo = pickle.load(open(demo_file, 'rb'))
-        expert_obs = np.array(demo['observations'][0])
-        expert_actions = np.array(demo['actions'][0])
-        expert_next_obs = np.array(demo['next_observations'][0])
-        expert_dataset = {'observations': expert_obs, 'actions': expert_actions, 'next_observations': expert_next_obs}
+    # elif args.expert_episode == "multiple":
+    #     expert_dataset = get_dataset(env, args.env_name)
+    #     print(expert_dataset)
+    # elif args.expert_episode == "sample":
+    #     sampled_data = {}
+    #     expert_dataset = get_dataset(env, args.env_name)
+    #     for key, array in expert_dataset.items():
+    #         sample_size = 10000
+    #         size = array.shape[0]
+    #         random_indices = np.random.choice(size, sample_size, replace=False)
+    #         if array.ndim == 1: 
+    #             sampled_data[key] = array[random_indices]
+    #         elif array.ndim == 2:  
+    #             sampled_data[key] = array[random_indices, :]
+    #         else:
+    #             raise ValueError("Unsupported array dimension. Only 1D or 2D arrays are supported.")
+    #     expert_dataset = sampled_data
+    # elif args.expert_episode == "mismatchant":
+    #     demo_file = f"mismatch/ant.pkl"
+    #     demo = pickle.load(open(demo_file, 'rb'))
+    #     expert_obs = np.array(demo['observations'][:1000])
+    #     expert_actions = np.array(demo['actions'][:1000])
+    #     expert_next_obs = np.array(demo['next_observations'][:1000])
+    #     expert_dataset = {'observations': expert_obs, 'actions': expert_actions, 'next_observations': expert_next_obs}
+    # elif args.expert_episode == "mismatchhalfcheetah":
+    #     demo_file = f"mismatch/halfcheetah.pkl"
+    #     demo = pickle.load(open(demo_file, 'rb'))
+    #     expert_obs = np.array(demo['observations'][0])
+    #     expert_actions = np.array(demo['actions'][0])
+    #     expert_next_obs = np.array(demo['next_observations'][0])
+    #     expert_dataset = {'observations': expert_obs, 'actions': expert_actions, 'next_observations': expert_next_obs}
     print("dataset_number", args.expert_episode)
     print("dataset size:", expert_dataset['observations'].shape[0])
     

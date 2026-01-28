@@ -78,7 +78,7 @@ class Agent:
             env_firstname = self.args.env_name.split('-')[0]
             if 'maze2d' in self.args.env_name:
                 env_firstname = 'maze2d-medium'
-            model_dir = os.path.join(os.getcwd(), "model")
+            model_dir = os.path.join(os.getcwd(), "icvf_model")
             icvf_path = os.path.join(model_dir, f"{env_firstname}{args.dataset_num}{args.dataset_quality}.pt")
             self.phi_net.load_state_dict(torch.load(icvf_path, weights_only=False))
             for param in self.phi_net.parameters():
@@ -297,19 +297,16 @@ class Agent:
             print("self.args.env_name:", self.args.env_name)
             return
 
-        # 定义输入范围和采样密度
         x_min, x_max = 0, 7
         y_min, y_max = 0, 7
         density = 0.02
 
-        # 生成网格
         x = np.arange(x_min, x_max, density)
         y = np.arange(y_min, y_max, density)
         X, Y = np.meshgrid(x, y)
 
         self.f_net.eval()
 
-        # 构造输入：前两维是xy，后两维为0
         input_grid = np.c_[X.ravel(), Y.ravel(), np.zeros_like(Y.ravel()), np.zeros_like(Y.ravel())]
 
         if self.args.using_icvf:
@@ -323,7 +320,6 @@ class Agent:
 
         Z = output_tensor.cpu().numpy().reshape(X.shape)
 
-        # 画图
         plt.figure(figsize=(8, 6))
         plt.contourf(X, Y, Z, levels=100, cmap='viridis')
         cbar = plt.colorbar()
@@ -346,7 +342,6 @@ class Agent:
         if "maze2d-medium" not in self.args.env_name or self.state_action:
             return
 
-        # 定义输入范围和采样密度
         x_min, x_max = 0, 7
         y_min, y_max = 0, 7
         density = 0.02
@@ -612,16 +607,11 @@ class Agent:
     def expand_and_fill(self, buffer, target_len):
         current_len = buffer.shape[0]
         if current_len < target_len:
-            # 计算重复次数
             repeat_count = target_len // current_len
-            # 重复数据，确保不会超过目标长度
             repeated_buffer = buffer.repeat(repeat_count, 1)
-            # 计算剩余需要填充的长度
             remaining_len = target_len - repeated_buffer.shape[0]
             if remaining_len > 0:
-                # 从原始buffer中随机采样剩余的数据进行填充
                 additional_samples = buffer[torch.randint(0, current_len, (remaining_len,))]
-                # 拼接数据
                 expanded_buffer = torch.cat([repeated_buffer, additional_samples], dim=0)
             else:
                 expanded_buffer = repeated_buffer

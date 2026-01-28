@@ -19,13 +19,10 @@ downstream="td3"
 mkdir -p logs
 
 rounds=(
-  # 格式: "update_timestep alpha wandb_name"
+  # wandb name
   "main"
 )
 
-# ================================
-# 🚀 定义运行一轮的函数
-# ================================
 run_round() {
   local wandb_name=$1
   local gpu_idx=0
