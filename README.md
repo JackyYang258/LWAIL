@@ -6,7 +6,7 @@
 
 This is the official PyTorch implementation of the paper **Latent Wasserstein Adversarial Imitation Learning (LWAIL)**.
 
-[**Read the Paper**]([https://arxiv.org/abs/2603.05440])
+[**Read the Paper**](https://arxiv.org/abs/2603.05440)
 
 ## 📝 Abstract
 Imitation Learning (IL) enables agents to mimic expert behavior by learning from demonstrations. However, traditional IL methods require large amounts of medium-to-high-quality demonstrations as well as actions of expert demonstrations, both of which are often unavailable. To reduce this need, we propose Latent Wasserstein Adversarial Imitation Learning (LWAIL), a novel adversarial imitation learning framework that focuses on state-only distribution matching. It benefits from the Wasserstein distance computed in a dynamics-aware latent space. This dynamics-aware latent space differs from prior work and is obtained via a pre-training stage, where we train the Intention Conditioned Value Function (ICVF) to capture a dynamics-aware structure of the state space using a small set of randomly generated state-only data. We show that this enhances the policy’s understanding of state transitions, enabling the learning process to use only one
@@ -75,10 +75,10 @@ bash all_run.bash
 If you find this code or paper useful for your research, please cite:
 
 ```
-@article{yang2026lwail,
+@inproceedings{yang2026lwail,
   title={Latent Wasserstein Adversarial Imitation Learning},
   author={Siqi Yang and Kai Yan and Alexander G. Schwing and Yu-Xiong Wang},
-  journal={arXiv preprint arXiv:2603.05440},
+  booktitle={ICLR},
   year={2026}
 }
 ```
