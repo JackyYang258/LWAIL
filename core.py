@@ -1,5 +1,4 @@
 import torch
-from tqdm import tqdm
 
 from network import FullyConnectedNet, PhiNet
 from td3 import TD3
@@ -9,14 +8,14 @@ from ppo import PPO
 from utils import  gradient_penalty, get_normalized_score
 from sklearn.decomposition import PCA
 import matplotlib.pyplot as plt
-from sklearn.manifold import TSNE
 import os
-import matplotlib.pyplot as plt
 import gym
 from datetime import datetime
 import wandb
 import numpy as np
 from d4rl_utils import FixedStartWrapper
+
+PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
 
 class Agent:
     def __init__(self, state_dim, action_dim, env, expert_buffer, args):
@@ -25,8 +24,6 @@ class Agent:
         self.device = torch.device(self.args.cuda if torch.cuda.is_available() else 'cpu')
         self.using_icvf = args.using_icvf
         self.state_action = args.state_action
-        self.expert_sample = True
-        self.update_everystep = args.update_everystep
         max_action = float(env.action_space.high[0])
         self.agent_kind = args.downstream
         self.max_action = float(env.action_space.high[0])
@@ -43,10 +40,6 @@ class Agent:
         print(f"max_action: {self.max_action}")
         self.env = env
 
-        if 'antmaze' in args.env_name:
-            self._init_normalization(expert_buffer)
-            expert_obs_norm = self._normalize_obs(expert_buffer['observations'])
-            expert_next_obs_norm = self._normalize_obs(expert_buffer['next_observations'])
         
         self.dataset = expert_buffer
         self.expert_states_buffer = torch.tensor(expert_buffer['observations']).float().to(self.device)
@@ -58,8 +51,7 @@ class Agent:
         
         self.hidden_dims = list(map(int, args.hidden_dim.split(',')))
         torch.set_default_dtype(torch.float32)
-        self.filename = "f_net.pth"
-        os.makedirs('./log', exist_ok=True)
+        os.makedirs(os.path.join(PROJECT_ROOT, 'log'), exist_ok=True)
 
         # Variable for record
         self.time_step = 0
@@ -78,7 +70,7 @@ class Agent:
             env_firstname = self.args.env_name.split('-')[0]
             if 'maze2d' in self.args.env_name:
                 env_firstname = 'maze2d-medium'
-            model_dir = os.path.join(os.getcwd(), "icvf_model")
+            model_dir = os.path.join(PROJECT_ROOT, "icvf_model")
             icvf_path = os.path.join(model_dir, f"{env_firstname}{args.dataset_num}{args.dataset_quality}.pt")
             self.phi_net.load_state_dict(torch.load(icvf_path, weights_only=False))
             for param in self.phi_net.parameters():
@@ -89,7 +81,12 @@ class Agent:
             self.phi_net = None
             print('Not using ICVF')
         if self.args.using_pwdice:
-            model = torch.load("model/"+self.args.env_name.split('-')[0]+"-random-v2_contrastive"+"_pd"+".pt")
+            model_path = os.path.join(
+                PROJECT_ROOT,
+                "model",
+                self.args.env_name.split('-')[0] + "-random-v2_contrastive_pd.pt"
+            )
+            model = torch.load(model_path)
             model.to(self.device)
             self.f_net = model.encoder.float()
             for name, param in self.f_net.named_parameters():
@@ -126,6 +123,7 @@ class Agent:
                             action = self.env.action_space.sample()
                         else:
                             action = self.agent.select_action_withrandom(state)
+                    # add noisy action to test robustness in random environments 
                     # noise_scale = 0.5
                     # noise = np.random.normal(0, noise_scale, size=action.shape)
                     # noisy_action = action + noise
@@ -287,7 +285,6 @@ class Agent:
     
     def evaluation(self):
         avg_reward = round(self.sum_episodes_reward / self.sum_episodes_num, 2)
-        normalized_score = get_normalized_score(self.args.env_name, avg_reward) * 100
         wandb.log({'train_average_score': avg_reward}, step=self.time_step)
         self.sum_episodes_reward = 0
         self.sum_episodes_num = 0
@@ -487,9 +484,10 @@ class Agent:
         self.generate_heat()
 
     def save_fnet(self):
-        os.makedirs('model', exist_ok=True)
+        model_dir = os.path.join(PROJECT_ROOT, 'model')
+        os.makedirs(model_dir, exist_ok=True)
         env_firstname = self.args.env_name.split('-')[0]
-        path = os.path.join('model', env_firstname + 'pref.pt')
+        path = os.path.join(model_dir, env_firstname + 'pref.pt')
         torch.save(self.f_net.state_dict(), path)
         print(f"Model saved to {path}")
 
@@ -518,43 +516,6 @@ class Agent:
         self.sample_next_states = self.sample_next_states[:self.args.update_timestep]
         self.sample_actions = self.sample_actions[:self.args.update_timestep]
         
-        # while self.time_step <= 500000:
-        #     state, _= self.env.reset()
-        #     current_ep_reward = 0 # reward for the current episode
-
-        #     for _ in range(1, self.args.max_ep_len + 1):
-        #         if self.time_step < self.args.start_timesteps:
-        #             action = self.env.action_space.sample()
-        #         else:
-        #             action = self.agent.select_action_withrandom(np.array(state))
-        #         next_state, reward, terminated, truncated, _ = self.env.step(action)
-        #         done = float(truncated or terminated)
-        #         self.agent.buffer.add(state, action, next_state, reward, float(done))
-        #         state = next_state
-
-        #         self.time_step += 1
-        #         current_ep_reward += reward
-
-        #         if self.time_step % self.args.update_timestep == 0:
-        #             self.get_pseudo_rewards() # Update the buffer with pseudo rewards
-
-        #             if not self.update_everystep:
-        #                 self.agent.update() # Update the agent with the pseudo rewards
-
-        #         if self.update_everystep and self.time_step > self.args.update_timestep:
-        #             self.agent.train()
-                    
-        #         if self.time_step % self.args.eval_freq == 0:
-        #             self.evaluation()
-        #             self.evaluate_policy()
-                
-        #         if done:
-        #             break
-
-        #     self.sum_episodes_reward += current_ep_reward
-        #     self.sum_episodes_num += 1
-        #     self.i_episode += 1
-        
     def plot_reward(self):
         print("Plotting reward")
         lens = 1000
@@ -564,7 +525,6 @@ class Agent:
         f_value = (-self.f_net(obs, obs)).detach().cpu().numpy()
 
         obs = obs.cpu().numpy()
-        import matplotlib.colors as mcolors
         pca = PCA(n_components=2)
         reduced_observations = pca.fit_transform(obs)
 
@@ -618,44 +578,3 @@ class Agent:
         else:
             expanded_buffer = buffer
         return expanded_buffer
-    
-    def _init_normalization(self, dataset):
-        print("Initializing Normalization Statistics from Expert Buffer...")
-        obs = dataset['observations']
-        
-        # 1. Compute Global Mean and Std
-        self.obs_mean = np.mean(obs, axis=0)
-        self.obs_std = np.std(obs, axis=0) + 1e-10
-        
-        # 2. Compute XY Min/Max for Coordinate Normalization
-        # NOTE: Ideally, these should come from the FULL offline dataset, not just the expert buffer.
-        # If you have access to the full D4RL dataset stats, replace these lines.
-        self.xy_min = obs[:, :2].min(axis=0)
-        self.xy_max = obs[:, :2].max(axis=0)
-        
-        print(f"Obs Mean: {self.obs_mean[:2]}...")
-        print(f"XY Min: {self.xy_min}, XY Max: {self.xy_max}")
-
-    def _normalize_obs(self, obs):
-        """
-        Applies the specific AntMaze processing:
-        1. Standardize (mean/std)
-        2. Normalize XY coordinates to [0, 1]
-        """
-        # Ensure obs is numpy (if it's a single state from gym, it might need reshape)
-        is_single = False
-        if len(obs.shape) == 1:
-            obs = obs[np.newaxis, :]
-            is_single = True
-            
-        # 1. Standardization
-        # We only standardize dimensions present in mean/std (usually all)
-        norm_obs = (obs - self.obs_mean) / self.obs_std
-        
-        # 2. XY Coordinate Normalization to [0, 1]
-        # Only apply to the first 2 dimensions (x, y)
-        norm_obs[:, :2] = (norm_obs[:, :2] - self.xy_min) / (self.xy_max - self.xy_min)
-        
-        if is_single:
-            return norm_obs[0]
-        return norm_obs

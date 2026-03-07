@@ -14,6 +14,8 @@ import os
 import pickle
 import minari
 
+PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
+
 
 def main(args):
 
@@ -29,7 +31,7 @@ def main(args):
 
     # load dataset
     if args.expert_episode == "one":
-        savedir = "one_expert_trajectory"
+        savedir = os.path.join(PROJECT_ROOT, "one_expert_trajectory")
         file_path = os.path.join(savedir, args.env_name + ".pkl")
         with open(file_path, 'rb') as f:
             expert_dataset = pickle.load(f)

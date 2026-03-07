@@ -14,6 +14,8 @@ import os
 import pickle
 from d4rl_utils import FixedStartWrapper
 
+PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
+
 
 def main(args):
     log_time()
@@ -27,7 +29,7 @@ def main(args):
 
     # load dataset
     if args.expert_episode == "one":
-        savedir = "one_expert_trajectory"
+        savedir = os.path.join(PROJECT_ROOT, "one_expert_trajectory")
         file_path = os.path.join(savedir, args.env_name + args.dataset_suffix + ".pkl")
         with open(file_path, 'rb') as f:
             expert_dataset = pickle.load(f)

@@ -17,6 +17,8 @@ import wandb
 import numpy as np
 import minari
 
+PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
+
 class Agent:
     def __init__(self, state_dim, action_dim, env, expert_buffer, args):
         # Basic information
@@ -53,7 +55,7 @@ class Agent:
         self.hidden_dims = list(map(int, args.hidden_dim.split(',')))
         torch.set_default_dtype(torch.float32)
         self.filename = "f_net.pth"
-        os.makedirs('./log', exist_ok=True)
+        os.makedirs(os.path.join(PROJECT_ROOT, 'log'), exist_ok=True)
 
         # Variable for record
         self.time_step = 0
@@ -73,7 +75,7 @@ class Agent:
                 env_firstname = (self.args.env_name.split('/')[1]).split('-')[0]
             else:
                 env_firstname = 'mujocohumanoid'
-            model_dir = os.path.join(os.getcwd(), "icvf_model")
+            model_dir = os.path.join(PROJECT_ROOT, "icvf_model")
             icvf_path = os.path.join(model_dir, f"{env_firstname}.pt")
             self.phi_net.load_state_dict(torch.load(icvf_path, weights_only=False))
             for param in self.phi_net.parameters():
@@ -84,7 +86,12 @@ class Agent:
             self.phi_net = None
             print('Not using ICVF')
         if self.args.using_pwdice:
-            model = torch.load("model/"+self.args.env_name.split('-')[0]+"-random-v2_contrastive"+"_pd"+".pt")
+            model_path = os.path.join(
+                PROJECT_ROOT,
+                "model",
+                self.args.env_name.split('-')[0] + "-random-v2_contrastive_pd.pt"
+            )
+            model = torch.load(model_path)
             model.to(self.device)
             self.f_net = model.encoder.float()
             for name, param in self.f_net.named_parameters():

@@ -9,6 +9,8 @@ import minari
 import numpy as np
 import gym
 
+PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
+
 class FixedStartWrapper(gym.Wrapper):
     def __init__(self, env, fixed_start=[1.0,1.0,0.0,0.0], noise_scale=0.3):
         """
@@ -69,10 +71,10 @@ def get_dataset(env,
                 env_name: str,
                 clip_to_eps: bool = True,
                 eps: float = 1e-5,):
-    # save_dir = "/home/kaiyan3/siqi/IntentDICE/d4rl_datasets"
+    # save_dir = os.path.join(PROJECT_ROOT, "d4rl_datasets")
     # save_path = os.path.join(save_dir, f"{env_name}.npz")
     # if 'maze' in env_name:
-    #     save_path = "/home/kaiyan3/siqi/IntentDICE/d4rl_datasets/maze2d_expert_dataset.npz"
+    #     save_path = os.path.join(PROJECT_ROOT, "d4rl_datasets", "maze2d_expert_dataset.npz")
     # print(f"Loading dataset for path: {save_path}")
     # if not os.path.exists(save_path):
     #     raise FileNotFoundError(f"Dataset file not found for task: {save_path}")
@@ -84,9 +86,12 @@ def get_dataset(env,
     #     'terminals': data['terminals'],
     #     'next_observations': data['next_observations'] if 'next_observations' in data else None
     # }
+    traj_dir = os.path.join(PROJECT_ROOT, "multiple_expert_trajectory")
     if 'maze2d-' in env_name:
         print("Loading maze dataset")
-        file_path = f"/home/kaiyan3/siqi/IntentDICE/multiple_expert_trajectory/{env_name}.pkl"
+        file_path = os.path.join(traj_dir, f"{env_name}.pkl")
+        if not os.path.exists(file_path):
+            raise FileNotFoundError(f"Dataset file not found: {file_path}")
         with open(file_path, 'rb') as f:
             dataset = pickle.load(f)
         dataset = {
@@ -98,7 +103,9 @@ def get_dataset(env,
         }
     elif 'dm_control' in env_name:
         path_name = env_name.split("/")[1]
-        file_path = "/home/kaiyan3/siqi/IntentDICE/multiple_expert_trajectory/" + path_name + ".pkl"
+        file_path = os.path.join(traj_dir, f"{path_name}.pkl")
+        if not os.path.exists(file_path):
+            raise FileNotFoundError(f"Dataset file not found: {file_path}")
         with open(file_path, 'rb') as f:
             dataset = pickle.load(f)
         dataset = {
