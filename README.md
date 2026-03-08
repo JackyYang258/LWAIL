@@ -3,6 +3,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
 [![ArXiv](https://img.shields.io/badge/arXiv-Paper-<COLOR>.svg)]([https://arxiv.org/abs/2603.05440])
+[![Website](https://img.shields.io/badge/Website-Project-green.svg)](https://jackyyang258.github.io/projects/lwail/)
 
 This is the official PyTorch implementation of the paper **Latent Wasserstein Adversarial Imitation Learning (LWAIL)**.
 
